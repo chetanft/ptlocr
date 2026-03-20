@@ -13,6 +13,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { rem14 } from '@/lib/rem';
 import type { EpodShipmentRow } from '@/lib/epod/types';
 import type { EpodStatusFilter } from './EpodKpiGrid';
+import { TransporterLogo } from './TransporterLogo';
 
 interface EpodShipmentTableProps {
   shipments: EpodShipmentRow[];
@@ -72,7 +73,7 @@ export function EpodShipmentTable({ shipments, activeStatus, selectedAwbs, onTog
             </TableCell>
             {showTransporterColumn ? (
               <TableCell style={{ height: rem14(96) }}>
-                <Typography variant="body-secondary-regular" color="primary">{shipment.transporter}</Typography>
+                <TransporterLogo name={shipment.transporter} showName={false} />
               </TableCell>
             ) : null}
             <TableCell style={{ height: rem14(96) }}>
