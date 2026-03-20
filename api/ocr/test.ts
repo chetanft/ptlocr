@@ -1,5 +1,5 @@
 // Vercel Serverless Function for OCR Testing (Sandbox)
-import type { OcrProvider } from '../_lib/openaiOcr.ts';
+import type { OcrProvider } from '../_lib/openaiOcr.js';
 
 export const config = {
   runtime: 'edge',

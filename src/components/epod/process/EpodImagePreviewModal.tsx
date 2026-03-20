@@ -104,9 +104,9 @@ export function EpodImagePreviewModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalContent className="w-[min(1180px,96vw)] max-w-none">
+      <ModalContent className="!w-[min(1200px,96vw)] max-w-none">
         <ModalHeader>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex w-full items-start justify-between gap-4">
             <div className="min-w-0 flex flex-col gap-2">
               <ModalTitle className="max-w-full truncate text-[2rem] leading-tight">
                 {preview?.fileName ?? item?.fileName ?? 'Image review'}
@@ -162,8 +162,8 @@ export function EpodImagePreviewModal({
           </div>
         </ModalHeader>
         <ModalBody>
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,24rem)]">
-            <div className="flex min-h-[28rem] min-w-0 flex-col gap-4">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
+            <div className="flex min-h-[28rem] w-full min-w-0 flex-col gap-4 xl:w-auto xl:flex-[1.2]">
               <div className="flex items-center justify-between gap-3">
                 <Typography variant="body-primary-medium" color="primary" className="text-[1.125rem] leading-7">
                   Uploaded POD image
@@ -198,7 +198,7 @@ export function EpodImagePreviewModal({
               )}
             </div>
 
-            <div className="flex min-h-[28rem] min-w-0 flex-col gap-4">
+            <div className="flex min-h-[28rem] w-full min-w-0 flex-col gap-4 xl:w-auto xl:min-w-[20rem] xl:max-w-[24rem] xl:shrink-0">
               {errorMessage ? <Alert variant="danger">{errorMessage}</Alert> : null}
 
               {item ? (

@@ -6,21 +6,9 @@ exports.findShipmentByFileName = findShipmentByFileName;
 exports.getAllShipments = getAllShipments;
 const fs_1 = require("fs");
 const path_1 = require("path");
-const url_1 = require("url");
-// ESM-compatible __dirname replacement
-const currentDir = (() => {
-    try {
-        return (0, path_1.dirname)((0, url_1.fileURLToPath)(import.meta.url));
-    }
-    catch {
-        return process.cwd();
-    }
-})();
-// Try multiple paths to find the shipment data JSON
+// Keep lookup simple for serverless: Vercel includes src/data via vercel.json includeFiles.
 const CANDIDATE_PATHS = [
     (0, path_1.join)(process.cwd(), 'src/data/epodExtractedShipments.json'),
-    (0, path_1.join)(currentDir, '../../src/data/epodExtractedShipments.json'),
-    (0, path_1.join)(currentDir, '../../../src/data/epodExtractedShipments.json'),
     (0, path_1.join)(process.cwd(), 'src', 'data', 'epodExtractedShipments.json'),
 ];
 let shipments = [];

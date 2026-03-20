@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { processEpodBatch } from '../_lib/epodProcess.ts';
+import { processEpodBatch } from '../_lib/epodProcess.js';
 import { IncomingForm } from 'formidable';
 import { readFileSync, unlinkSync } from 'fs';
-import type { OcrProvider } from '../_lib/openaiOcr.ts';
+import type { OcrProvider } from '../_lib/openaiOcr.js';
 
 export const config = {
   api: {
