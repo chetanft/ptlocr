@@ -63,7 +63,7 @@ export default function EpodUploadPage() {
   const [activeProcessFilter, setActiveProcessFilter] = useState<EpodProcessingFilter>('all');
 
   // ---- Serverless processing hook ----
-  const { processAsync, result, isProcessing, error: processError, reset: resetProcess } = useEpodProcess();
+  const { processAsync, result, isProcessing, error: processError, reset: resetProcess, progress } = useEpodProcess();
 
   // ---- Derived data from result ----
   const items = result?.items ?? [];
@@ -168,7 +168,7 @@ export default function EpodUploadPage() {
       {currentStep === 1 ? (
         <div className="flex flex-col gap-4">
           {isProcessing ? (
-            <EpodLoadingState label={`Processing ${files.length} file${files.length !== 1 ? 's' : ''} with OCR...`} />
+            <EpodLoadingState label={`Processing file ${progress.completed + 1} of ${progress.total || files.length}...`} />
           ) : result ? (
             <>
               <EpodReviewKpiGrid

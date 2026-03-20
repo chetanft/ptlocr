@@ -3,7 +3,8 @@ import { processEpodBatch } from '../_lib/epodProcess';
 
 export const config = {
   api: {
-    bodyParser: false, // We handle multipart ourselves
+    bodyParser: false,
+    sizeLimit: '50mb',
   },
 };
 
