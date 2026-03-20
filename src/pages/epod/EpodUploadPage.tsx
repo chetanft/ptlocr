@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, Button } from 'ft-design-system';
 import { useAuth } from '@/auth/AuthContext';
-import { getEpodListPathForRole } from '@/auth/routeUtils';
+import { getEpodJobPathForRole, getEpodListPathForRole } from '@/auth/routeUtils';
 import { EpodProcessingStageLoader } from '@/components/epod/flow/EpodProcessingStageLoader';
 import { EpodProgressStepper } from '@/components/epod/flow/EpodProgressStepper';
 import { EpodUploadDropzone } from '@/components/epod/flow/EpodUploadDropzone';
@@ -13,15 +13,27 @@ import { EpodStickyFooter } from '@/components/epod/layout/EpodStickyFooter';
 import { EpodProcessDetailDrawer } from '@/components/epod/process/EpodProcessDetailDrawer';
 import { EpodReviewKpiGrid } from '@/components/epod/review/EpodReviewKpiGrid';
 import { EpodReviewResultsTable } from '@/components/epod/review/EpodReviewResultsTable';
+import { EpodSubmissionStatusScreen } from '@/components/epod/submission/EpodSubmissionStatusScreen';
 import { EpodAwbScopeGuard } from '@/components/epod/state/EpodAwbScopeGuard';
 import { EpodErrorState } from '@/components/epod/state/EpodErrorState';
 import { useEpodProcess } from '@/hooks/epod/useEpodProcess';
-import { applyEpodWorkflowAction, createEpodWorkflow, type EpodProcessResult, type ProcessedItem, type ProcessedOcrPatch } from '@/lib/epodApi';
+import {
+  applyEpodWorkflowAction,
+  createEpodSubmissionJob,
+  createEpodWorkflow,
+  getEpodSubmissionJob,
+  getReviewFinalMatchStatus,
+  type EpodProcessResult,
+  type EpodSubmissionJob,
+  type ProcessedItem,
+  type ProcessedOcrPatch,
+} from '@/lib/epodApi';
 import { processSelectedAwbFlow } from '@/lib/epod/selectedFlowProcessor';
 import type { EpodProcessingFilter, EpodUploadFile, EpodUploadRouteState } from '@/lib/epod/types';
 import { rem14 } from '@/lib/rem';
 
 const STEPS = ['Upload Images', 'Process Images', 'Review'] as const;
+type SubmissionUiState = 'idle' | 'submitting' | 'submitted_success' | 'submitted_failed';
 
 function createUploadFile(file: File): EpodUploadFile {
   return {
@@ -48,6 +60,7 @@ export default function EpodUploadPage() {
         ? 'REVIEWER_PORTAL'
         : 'TRANSPORTER_PORTAL';
   const selectedAwbs = useMemo(() => selectedShipments.map((shipment) => shipment.awbNumber), [selectedShipments]);
+  const epodJobPath = (jobId: string) => getEpodJobPathForRole(user?.role ?? 'Transporter', jobId);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [files, setFiles] = useState<EpodUploadFile[]>([]);
@@ -60,6 +73,8 @@ export default function EpodUploadPage() {
   const [processResult, setProcessResult] = useState<EpodProcessResult | null>(null);
   const [selectionProcessing, setSelectionProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState(0);
+  const [submissionState, setSubmissionState] = useState<SubmissionUiState>('idle');
+  const [submissionJob, setSubmissionJob] = useState<EpodSubmissionJob | null>(null);
 
   const { processAsync, result, isProcessing, error: processError, progress, reset: resetProcess } = useEpodProcess();
   const isActivelyProcessing = isProcessing || selectionProcessing;
@@ -129,6 +144,63 @@ export default function EpodUploadPage() {
     () => workingItems.find((item) => item.id === selectedProcessItemId) ?? null,
     [selectedProcessItemId, workingItems],
   );
+  const reviewItems = useMemo(
+    () => workingItems.filter((item) => item.statusLabel !== 'Unmapped'),
+    [workingItems],
+  );
+  const reviewCounts = useMemo(() => {
+    const summary = { matched: 0, manuallyMatched: 0, skipped: 0 };
+    for (const item of reviewItems) {
+      const status = getReviewFinalMatchStatus(item);
+      if (status === 'matched') summary.matched += 1;
+      else if (status === 'manually_matched') summary.manuallyMatched += 1;
+      else summary.skipped += 1;
+    }
+    return summary;
+  }, [reviewItems]);
+  const filteredReviewItems = useMemo(() => {
+    switch (activeProcessFilter) {
+      case 'matched':
+        return reviewItems.filter((item) => getReviewFinalMatchStatus(item) === 'matched');
+      case 'needsReview':
+        return reviewItems.filter((item) => getReviewFinalMatchStatus(item) === 'manually_matched');
+      case 'skipped':
+        return reviewItems.filter((item) => getReviewFinalMatchStatus(item) === 'skipped');
+      default:
+        return reviewItems;
+    }
+  }, [activeProcessFilter, reviewItems]);
+
+  useEffect(() => {
+    if (submissionState !== 'submitting' || !submissionJob?.jobId) {
+      return;
+    }
+
+    let cancelled = false;
+    const intervalId = window.setInterval(async () => {
+      try {
+        const nextJob = await getEpodSubmissionJob(submissionJob.jobId);
+        if (cancelled) {
+          return;
+        }
+        setSubmissionJob(nextJob);
+        if (nextJob.status === 'success') {
+          setSubmissionState('submitted_success');
+        } else if (nextJob.status === 'failed' || nextJob.status === 'cancelled') {
+          setSubmissionState('submitted_failed');
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setWorkflowError(error?.message || 'Failed to track submission progress');
+        }
+      }
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [submissionJob?.jobId, submissionState]);
 
   const handleFilesSelected = (selectedFiles: FileList) => {
     const nextFiles = Array.from(selectedFiles).map(createUploadFile);
@@ -181,8 +253,32 @@ export default function EpodUploadPage() {
     }
   };
 
-  const handleSubmit = () => {
-    navigate(epodListPath);
+  const handleSubmit = async () => {
+    if (!workflowBatchId) {
+      return;
+    }
+
+    try {
+      setWorkflowError(null);
+      const itemIds = reviewItems
+        .filter((item) => getReviewFinalMatchStatus(item) !== 'skipped')
+        .map((item) => item.id);
+      const job = await createEpodSubmissionJob({
+        batchId: workflowBatchId,
+        actor,
+        itemIds,
+      });
+      setSubmissionJob(job);
+      if (job.status === 'success') {
+        setSubmissionState('submitted_success');
+      } else if (job.status === 'failed' || job.status === 'cancelled') {
+        setSubmissionState('submitted_failed');
+      } else {
+        setSubmissionState('submitting');
+      }
+    } catch (error: any) {
+      setWorkflowError(error?.message || 'Failed to submit reviewed ePODs');
+    }
   };
 
   const handleOpenView = (item: ProcessedItem) => {
@@ -313,13 +409,19 @@ export default function EpodUploadPage() {
             </Button>
           ) : null}
           {currentStep === 1 && processResult ? (
-            <Button variant="primary" onClick={() => setCurrentStep(2)}>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setCurrentStep(2);
+                setActiveProcessFilter('all');
+              }}
+            >
               Next
             </Button>
           ) : null}
           {currentStep === 2 && processResult ? (
-            <Button variant="primary" onClick={handleSubmit} disabled={processCounts.matched === 0}>
-              Submit to consignor
+            <Button variant="primary" onClick={() => void handleSubmit()} disabled={reviewCounts.matched + reviewCounts.manuallyMatched === 0}>
+              Submit
             </Button>
           ) : null}
         </div>
@@ -330,6 +432,7 @@ export default function EpodUploadPage() {
   const resultSurface = processResult ? (
     <>
       <EpodReviewKpiGrid
+        mode="process"
         totalAwbs={totalAwbCount}
         totalUploadedImages={processResult.summary.totalUploadedImages}
         matchedCount={processCounts.matched}
@@ -339,9 +442,55 @@ export default function EpodUploadPage() {
         activeFilter={activeProcessFilter}
         onFilterChange={setActiveProcessFilter}
       />
-      <EpodReviewResultsTable items={filteredItems} onView={handleOpenView} />
+      <EpodReviewResultsTable mode="process" items={filteredItems} onView={handleOpenView} />
     </>
   ) : null;
+  const reviewSurface = processResult ? (
+    <>
+      <EpodReviewKpiGrid
+        mode="review"
+        totalAwbs={reviewItems.length}
+        totalUploadedImages={reviewItems.length}
+        matchedCount={reviewCounts.matched}
+        needReviewCount={reviewCounts.manuallyMatched}
+        skippedCount={reviewCounts.skipped}
+        unmappedCount={0}
+        activeFilter={activeProcessFilter}
+        onFilterChange={setActiveProcessFilter}
+      />
+      <EpodReviewResultsTable mode="review" items={filteredReviewItems} onView={handleOpenView} />
+    </>
+  ) : null;
+
+  if (submissionState !== 'idle' && submissionJob) {
+    return (
+      <EpodPageShell header={<></>}>
+        <EpodSubmissionStatusScreen
+          status={submissionState === 'submitting' ? 'in_progress' : submissionState === 'submitted_success' ? 'success' : 'failed'}
+          totalFiles={submissionJob.totalFiles}
+          submittedCount={submissionJob.submittedCount}
+          failedCount={submissionJob.failedCount}
+          subtitle={submissionState === 'submitting' ? 'This may take a few moments.' : undefined}
+          primaryActionLabel={submissionState === 'submitted_success' ? 'Go to Job page' : 'Go to Job page'}
+          secondaryActionLabel={
+            submissionState === 'submitting'
+              ? 'Minimize to ePOD'
+              : submissionState === 'submitted_success'
+                ? 'Go to ePOD'
+                : undefined
+          }
+          onPrimaryAction={() => navigate(epodJobPath(submissionJob.jobId))}
+          onSecondaryAction={
+            submissionState === 'submitting'
+              ? () => navigate(epodListPath)
+              : submissionState === 'submitted_success'
+                ? () => navigate(epodListPath)
+                : undefined
+          }
+        />
+      </EpodPageShell>
+    );
+  }
 
   const content = (
     <div className="flex flex-col" style={{ gap: rem14(40) }}>
@@ -370,7 +519,7 @@ export default function EpodUploadPage() {
         </div>
       ) : null}
 
-      {currentStep === 2 ? <div className="flex flex-col gap-4">{resultSurface}</div> : null}
+      {currentStep === 2 ? <div className="flex flex-col gap-4">{reviewSurface}</div> : null}
 
       <EpodProcessDetailDrawer
         item={selectedProcessItem}

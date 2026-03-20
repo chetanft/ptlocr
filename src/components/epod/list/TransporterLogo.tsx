@@ -1,10 +1,10 @@
-import { Logo, Typography } from 'ft-design-system';
+import { MECLogo, OMLogisticsLogo, SafexpressLogo, Typography } from 'ft-design-system';
 
-const LOGO_NAME_MAP: Record<string, string> = {
-  MEC: 'mec',
-  'Om Logistics': 'om-logistics',
-  Safexpress: 'safexpress',
-};
+const LOGO_COMPONENT_MAP = {
+  MEC: MECLogo,
+  'Om Logistics': OMLogisticsLogo,
+  Safexpress: SafexpressLogo,
+} as const;
 
 interface TransporterLogoProps {
   name: string;
@@ -12,12 +12,12 @@ interface TransporterLogoProps {
 }
 
 export function TransporterLogo({ name, showName = false }: TransporterLogoProps) {
-  const logoName = LOGO_NAME_MAP[name];
+  const LogoComponent = LOGO_COMPONENT_MAP[name as keyof typeof LOGO_COMPONENT_MAP];
 
-  if (logoName) {
+  if (LogoComponent) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Logo name={logoName} height={20} />
+        <LogoComponent height={22} />
         {showName ? (
           <Typography variant="body-secondary-regular" color="secondary">{name}</Typography>
         ) : null}

@@ -296,6 +296,63 @@ app.post('/api/epod/workflow/action', (req, res) => {
     }
 });
 
+app.post('/api/epod/submission', (req, res) => {
+    try {
+        const body = req.body || {};
+        const batchId = body.batchId || body.workflowBatchId;
+        if (!batchId || typeof batchId !== 'string') {
+            return res.status(400).json({ error: 'batchId is required' });
+        }
+
+        const itemIds = Array.isArray(body.itemIds) ? body.itemIds.filter((id: unknown) => typeof id === 'string') : null;
+
+        return res.json(
+            epodWorkflowStore.createSubmissionJob({
+                batchId,
+                source: body.source ?? null,
+                createdBy: body.createdBy ?? body.actor ?? null,
+                itemIds,
+            }),
+        );
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message || 'Failed to create submission job' });
+    }
+});
+
+app.get('/api/epod/submission/:jobId', (req, res) => {
+    try {
+        const job = epodWorkflowStore.getSubmissionJob(req.params.jobId);
+        if (!job) {
+            return res.status(404).json({ error: 'Submission job not found' });
+        }
+        return res.json(job);
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message || 'Failed to fetch submission job' });
+    }
+});
+
+app.post('/api/epod/submission/:jobId/resubmit', (req, res) => {
+    try {
+        const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds.filter((id: unknown) => typeof id === 'string') : null;
+        return res.json(
+            epodWorkflowStore.resubmitSubmissionJob({
+                jobId: req.params.jobId,
+                itemIds,
+            }),
+        );
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message || 'Failed to resubmit submission job' });
+    }
+});
+
+app.post('/api/epod/submission/:jobId/cancel', (req, res) => {
+    try {
+        return res.json(epodWorkflowStore.cancelSubmissionJob(req.params.jobId));
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message || 'Failed to cancel submission job' });
+    }
+});
+
 // Start
 app.listen(port, () => {
     console.log(`Backend server running on http://localhost:${port}`);

@@ -70,6 +70,8 @@ export interface ProcessedItem {
   id: string;
   processingMode?: 'bulk' | 'selection';
   bucket?: 'matched' | 'needs_review' | 'unmapped' | 'skipped';
+  finalMatchStatus?: 'matched' | 'manually_matched' | 'skipped';
+  manuallyMatched?: boolean;
   fileName: string;
   awbNumber: string | null;
   shipmentId: string | null;
@@ -100,6 +102,51 @@ export interface ProcessedItem {
   ocrFields: Record<string, unknown>;
 }
 
+export type ReviewFinalMatchStatus = 'matched' | 'manually_matched' | 'skipped';
+
+export function getReviewFinalMatchStatus(item: Pick<ProcessedItem, 'finalMatchStatus' | 'manuallyMatched' | 'statusLabel' | 'deliveryReviewStatus' | 'reason'>): ReviewFinalMatchStatus {
+  if (item.finalMatchStatus) {
+    return item.finalMatchStatus;
+  }
+
+  if (item.manuallyMatched) {
+    return 'manually_matched';
+  }
+
+  if (item.statusLabel === 'Skipped') {
+    return 'skipped';
+  }
+
+  if (item.statusLabel === 'Matched') {
+    return 'matched';
+  }
+
+  return 'manually_matched';
+}
+
+export function getReviewFinalMatchLabel(status: ReviewFinalMatchStatus): string {
+  switch (status) {
+    case 'manually_matched':
+      return 'Manually matched';
+    case 'skipped':
+      return 'Skipped';
+    default:
+      return 'Matched';
+  }
+}
+
+export function getDeliveryStatusLabel(status?: 'clean' | 'unclean' | null): string {
+  if (status === 'clean') return 'Clean';
+  if (status === 'unclean') return 'Unclean';
+  return '—';
+}
+
+export function getDeliveryStatusVariant(status?: 'clean' | 'unclean' | null): 'success' | 'warning' | 'secondary' {
+  if (status === 'clean') return 'success';
+  if (status === 'unclean') return 'warning';
+  return 'secondary';
+}
+
 function countMatchedAwbs(items: ProcessedItem[]) {
   return new Set(
     items
@@ -122,6 +169,26 @@ export interface EpodProcessResult {
 
 export interface EpodWorkflowResult extends EpodProcessResult {
   batchId: string;
+}
+
+export interface EpodSubmissionJobItem {
+  id: string;
+  awbNumber: string | null;
+  shipmentId: string | null;
+  fileName: string;
+  vehicleInfo: string | null;
+  status: 'Queued' | 'Submitting' | 'Submitted' | 'Failed';
+  failureReason?: string | null;
+}
+
+export interface EpodSubmissionJob {
+  jobId: string;
+  batchId: string;
+  status: 'in_progress' | 'success' | 'failed' | 'cancelled';
+  totalFiles: number;
+  submittedCount: number;
+  failedCount: number;
+  items: EpodSubmissionJobItem[];
 }
 
 /**
@@ -238,6 +305,70 @@ export async function applyEpodWorkflowAction(input: {
   if (!response.ok) {
     const err = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(err.error || 'Failed to update review workflow');
+  }
+
+  return response.json();
+}
+
+export async function createEpodSubmissionJob(input: {
+  batchId: string;
+  actor: string;
+  source?: string;
+  createdBy?: string;
+  itemIds?: string[];
+}): Promise<EpodSubmissionJob> {
+  const response = await fetch('/api/epod/submission', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(err.error || 'Failed to create submission job');
+  }
+
+  return response.json();
+}
+
+export async function getEpodSubmissionJob(jobId: string): Promise<EpodSubmissionJob> {
+  const response = await fetch(`/api/epod/submission/${jobId}`);
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(err.error || 'Failed to fetch submission job');
+  }
+
+  return response.json();
+}
+
+export async function resubmitEpodSubmissionJob(jobId: string, itemIds?: string[]): Promise<EpodSubmissionJob> {
+  const response = await fetch(`/api/epod/submission/${jobId}/resubmit`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ itemIds }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(err.error || 'Failed to resubmit submission job');
+  }
+
+  return response.json();
+}
+
+export async function cancelEpodSubmissionJob(jobId: string): Promise<EpodSubmissionJob> {
+  const response = await fetch(`/api/epod/submission/${jobId}/cancel`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(err.error || 'Failed to cancel submission job');
   }
 
   return response.json();

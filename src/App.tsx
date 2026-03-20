@@ -12,6 +12,7 @@ import PodUploadPage from "./pages/pod/PodUploadPage";
 import PodReviewPage from "./pages/pod/PodReviewPage";
 import EpodPage from "./pages/EpodPage";
 import EpodUploadPage from "./pages/epod/EpodUploadPage";
+import EpodSubmissionJobPage from "./pages/epod/EpodSubmissionJobPage";
 import LoginPage from "./pages/LoginPage";
 
 const queryClient = new QueryClient();
@@ -53,18 +54,21 @@ const App = () => (
                     <Route element={<RequireRole role="Transporter" />}>
                       <Route path="/transporter/epod" element={<EpodPage />} />
                       <Route path="/transporter/epod/upload" element={<EpodUploadPage />} />
+                      <Route path="/transporter/epod/jobs/:jobId" element={<EpodSubmissionJobPage />} />
                       <Route path="/transporter/epod/:id/review" element={<PodReviewPage />} />
                     </Route>
 
                     <Route element={<RequireRole role="Ops" />}>
                       <Route path="/ops/epod" element={<EpodPage />} />
                       <Route path="/ops/epod/upload" element={<EpodUploadPage />} />
+                      <Route path="/ops/epod/jobs/:jobId" element={<EpodSubmissionJobPage />} />
                       <Route path="/ops/epod/:id/review" element={<PodReviewPage />} />
                     </Route>
 
                     <Route element={<RequireRole role="Reviewer" />}>
                       <Route path="/reviewer/epod" element={<EpodPage />} />
                       <Route path="/reviewer/epod/upload" element={<EpodUploadPage />} />
+                      <Route path="/reviewer/epod/jobs/:jobId" element={<EpodSubmissionJobPage />} />
                       <Route path="/reviewer/epod/:id/review" element={<PodReviewPage />} />
                     </Route>
 

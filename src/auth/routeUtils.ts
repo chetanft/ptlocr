@@ -60,6 +60,19 @@ export function getEpodReviewPathForRole(role: AppRole, id: string): string {
   }
 }
 
+export function getEpodJobPathForRole(role: AppRole, jobId: string): string {
+  switch (role) {
+    case "Transporter":
+      return `/transporter/epod/jobs/${jobId}`;
+    case "Ops":
+      return `/ops/epod/jobs/${jobId}`;
+    case "Reviewer":
+      return `/reviewer/epod/jobs/${jobId}`;
+    default:
+      return "/login";
+  }
+}
+
 export function getOpsQueuePath() {
   return "/ops/epod";
 }

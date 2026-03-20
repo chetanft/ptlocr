@@ -165,12 +165,12 @@ export interface EpodProcessedDisplayRow {
   id: string;
   awbNumber: string;
   shipmentId: string | null;
-  fromName: string | null;
-  fromSubtext: string | null;
-  toName: string | null;
-  toSubtext: string | null;
-  transporter: string | null;
   fileName: string;
+  finalMatchStatus?: 'matched' | 'manually_matched' | 'skipped';
+  manuallyMatched?: boolean;
+  deliveryReviewStatus?: EpodDeliveryReviewStatus;
+  attachmentLabel?: string | null;
+  attachmentTooltip?: string | null;
   statusLabel: 'Matched' | 'Needs Review' | 'Skipped' | 'Unmapped';
   statusVariant: 'success' | 'warning' | 'danger' | 'secondary';
   reason: string;
@@ -181,6 +181,38 @@ export interface EpodProcessedDisplayRow {
 export interface EpodSubmissionSummary {
   submittedCount: number;
   submittedIds: string[];
+}
+
+export type EpodSubmissionJobStatus = 'in_progress' | 'success' | 'failed' | 'cancelled';
+
+export interface EpodSubmissionJobItem {
+  id: string;
+  workflowItemId?: string;
+  awbNumber: string | null;
+  shipmentId: string | null;
+  fileName: string;
+  vehicleInfo: string | null;
+  finalMatchStatus?: 'matched' | 'manually_matched' | 'skipped';
+  deliveryReviewStatus?: EpodDeliveryReviewStatus;
+  status: 'Queued' | 'Submitting' | 'Submitted' | 'Failed';
+  failureReason?: string | null;
+}
+
+export interface EpodSubmissionJob {
+  jobId: string;
+  batchId?: string;
+  status: EpodSubmissionJobStatus;
+  totalFiles: number;
+  processedCount?: number;
+  submittedCount: number;
+  failedCount: number;
+  pendingCount?: number;
+  attempt?: number;
+  startedAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  items: EpodSubmissionJobItem[];
 }
 
 export interface EpodUploadRouteState {

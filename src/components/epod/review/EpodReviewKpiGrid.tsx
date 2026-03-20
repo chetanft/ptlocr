@@ -3,6 +3,7 @@ import type { EpodProcessingFilter } from '@/lib/epod/types';
 import { rem14 } from '@/lib/rem';
 
 interface EpodReviewKpiGridProps {
+  mode?: 'process' | 'review';
   totalAwbs: number;
   totalUploadedImages: number;
   matchedCount: number;
@@ -13,13 +14,20 @@ interface EpodReviewKpiGridProps {
   onFilterChange: (filter: EpodProcessingFilter) => void;
 }
 
-const KPI_CONFIG = [
+const PROCESS_KPI_CONFIG = [
   { key: 'totalAwbs', label: 'Total AWBs', tone: 'primary', filter: 'all' },
   { key: 'totalUploadedImages', label: 'Total uploaded images', tone: 'primary', filter: 'all' },
   { key: 'matchedCount', label: 'Matched', tone: 'success', filter: 'matched' },
   { key: 'needReviewCount', label: 'Need Review', tone: 'warning', filter: 'needsReview' },
   { key: 'skippedCount', label: 'Skipped', tone: 'danger', filter: 'skipped' },
   { key: 'unmappedCount', label: 'Unmapped images', tone: 'secondary', filter: 'unmapped' },
+] as const;
+
+const REVIEW_KPI_CONFIG = [
+  { key: 'totalUploadedImages', label: 'Total files', tone: 'primary', filter: 'all' },
+  { key: 'matchedCount', label: 'Matched', tone: 'success', filter: 'matched' },
+  { key: 'needReviewCount', label: 'Manually matched', tone: 'secondary', filter: 'needsReview' },
+  { key: 'skippedCount', label: 'Skipped', tone: 'danger', filter: 'skipped' },
 ] as const;
 
 function getValueColor(tone: string) {
@@ -38,16 +46,19 @@ function getValueColor(tone: string) {
 }
 
 export function EpodReviewKpiGrid(props: EpodReviewKpiGridProps) {
+  const mode = props.mode ?? 'process';
+  const kpiConfig = mode === 'review' ? REVIEW_KPI_CONFIG : PROCESS_KPI_CONFIG;
+  const totalFiles = props.totalUploadedImages || props.totalAwbs;
   return (
     <div
       className="grid"
       style={{
-        gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+        gridTemplateColumns: `repeat(${kpiConfig.length}, minmax(0, 1fr))`,
         gap: rem14(16),
       }}
     >
-      {KPI_CONFIG.map((item) => {
-        const value = props[item.key];
+      {kpiConfig.map((item) => {
+        const value = item.key === 'totalUploadedImages' ? totalFiles : props[item.key];
         const isActive = props.activeFilter === item.filter;
 
         return (

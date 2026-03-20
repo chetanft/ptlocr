@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from 'ft-design-system';
-import { rem } from '@/lib/rem';
 
 interface EpodFiltersPanelProps {
   search: string;
@@ -20,9 +19,6 @@ interface EpodFiltersPanelProps {
   transporterFilter: string;
   onTransporterFilterChange: (value: string) => void;
 }
-
-const FILTER_HEIGHT = 40;
-const DROPDOWN_WIDTH = 180;
 
 export function EpodFiltersPanel({
   search,
@@ -35,15 +31,15 @@ export function EpodFiltersPanel({
   const [endDate, setEndDate] = useState('2024-09-12');
 
   return (
-    <div className="flex items-center flex-wrap" style={{ gap: rem(12) }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
       {/* Location */}
       <Select key="mdc" defaultValue="MDC">
-        <SelectTrigger style={{ width: rem(DROPDOWN_WIDTH), height: rem(FILTER_HEIGHT) }}>
-          <SelectValue placeholder="Location" />
+        <SelectTrigger style={{ width: 200, height: 40, flexShrink: 0 }}>
+          <SelectValue placeholder="MDC Labs, Amritsar" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="MDC">MDC</SelectItem>
-          <SelectItem value="warehouse">Delhi DC</SelectItem>
+          <SelectItem value="MDC">MDC Labs, Amritsar</SelectItem>
+          <SelectItem value="warehouse">Delhi DC, Bawana</SelectItem>
         </SelectContent>
       </Select>
 
@@ -60,7 +56,7 @@ export function EpodFiltersPanel({
       {/* Transporter (consignor/ops only) */}
       {user?.role !== 'Transporter' ? (
         <Select value={transporterFilter} onValueChange={onTransporterFilterChange}>
-          <SelectTrigger style={{ width: rem(DROPDOWN_WIDTH), height: rem(FILTER_HEIGHT) }}>
+          <SelectTrigger style={{ width: 200, height: 40, flexShrink: 0 }}>
             <SelectValue placeholder="All Transporters" />
           </SelectTrigger>
           <SelectContent>
@@ -72,24 +68,51 @@ export function EpodFiltersPanel({
         </Select>
       ) : null}
 
-      {/* Search */}
-      <Input style={{ width: rem(240) }}>
-        <InputField
-          placeholder="Search AWB, shipment"
-          leadingIcon="search"
-          value={search}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
-          style={{ height: rem(FILTER_HEIGHT) }}
-        />
-      </Input>
+      {/* Load Type + Search combo */}
+      <div style={{ display: 'flex', alignItems: 'center', minWidth: 280, flexShrink: 1 }}>
+        <Select key="load-type" defaultValue="All">
+          <SelectTrigger
+            style={{
+              width: 110,
+              height: 40,
+              flexShrink: 0,
+              borderTopRightRadius: 0,
+              borderBottomRightRadius: 0,
+              borderRight: 'none',
+              backgroundColor: 'var(--bg-secondary)',
+            }}
+          >
+            <SelectValue placeholder="All Loads" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All">All Loads</SelectItem>
+            <SelectItem value="surface">Surface</SelectItem>
+            <SelectItem value="priority">Priority</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input style={{ flex: 1, minWidth: 170 }}>
+          <InputField
+            placeholder="Search loads"
+            leadingIcon="search"
+            value={search}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
+            style={{
+              height: 40,
+              borderTopLeftRadius: 0,
+              borderBottomLeftRadius: 0,
+            }}
+          />
+        </Input>
+      </div>
 
-      {/* Filter button — outline, same height as search */}
+      {/* Filter icon button */}
       <Button
         variant="secondary"
         icon="filter"
         iconPosition="only"
-        size="md"
+        size="sm"
         aria-label="Filter"
+        style={{ width: 40, height: 40, flexShrink: 0, padding: 0 }}
       />
     </div>
   );
