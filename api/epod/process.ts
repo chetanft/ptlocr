@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { processEpodBatch } from '../_lib/epodProcess';
+import { processEpodBatch } from '../_lib/epodProcess.js';
 import { IncomingForm } from 'formidable';
 import { readFileSync, unlinkSync } from 'fs';
 

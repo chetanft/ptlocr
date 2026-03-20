@@ -1,5 +1,5 @@
-import { extractFieldsFromFile, type EpodOcrResult } from './openaiOcr';
-import { findShipmentByAwb, findShipmentByFileName, normalizeAwb, type ShipmentRecord } from './shipmentMaster';
+import { extractFieldsFromFile, type EpodOcrResult } from './openaiOcr.js';
+import { findShipmentByAwb, findShipmentByFileName, normalizeAwb, type ShipmentRecord } from './shipmentMaster.js';
 
 export interface ProcessedItem {
   id: string;
