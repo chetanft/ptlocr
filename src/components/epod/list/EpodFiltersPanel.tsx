@@ -34,7 +34,9 @@ export function EpodFiltersPanel({
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
       {/* Location */}
       <Select key="mdc" defaultValue="MDC">
-        <SelectTrigger style={{ width: 200, height: 40, flexShrink: 0 }}>
+        <SelectTrigger
+          style={{ width: 200, height: 40, flexShrink: 0, borderRadius: '8px' }}
+        >
           <SelectValue placeholder="MDC Labs, Amritsar" />
         </SelectTrigger>
         <SelectContent>
