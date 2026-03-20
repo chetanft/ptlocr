@@ -1,6 +1,5 @@
 import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 
 export interface ShipmentRecord {
   awbNumber: string;
@@ -15,20 +14,9 @@ export interface ShipmentRecord {
   packageCount: number | null;
 }
 
-// ESM-compatible __dirname replacement
-const currentDir = (() => {
-  try {
-    return dirname(fileURLToPath(import.meta.url));
-  } catch {
-    return process.cwd();
-  }
-})();
-
-// Try multiple paths to find the shipment data JSON
+// Keep lookup simple for serverless: Vercel includes src/data via vercel.json includeFiles.
 const CANDIDATE_PATHS = [
   join(process.cwd(), 'src/data/epodExtractedShipments.json'),
-  join(currentDir, '../../src/data/epodExtractedShipments.json'),
-  join(currentDir, '../../../src/data/epodExtractedShipments.json'),
   join(process.cwd(), 'src', 'data', 'epodExtractedShipments.json'),
 ];
 
