@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { useAuth } from '@/auth/AuthContext';
 import extractedShipments from '@/data/epodExtractedShipments.json';
 import { getShipmentStatusOverrides, subscribeShipmentStatusOverrides } from '@/lib/epod/shipmentStatusStore';
 import type { EpodShipmentRow } from '@/lib/epod/types';
 
 const STATUS_VALUES = ['Pending Submission', 'Pending Approval', 'Rejected', 'Approved'] as const;
+const EMPTY_STATUS_OVERRIDES = {};
 
 interface ExtractedShipmentRecord {
   awbNumber: string;
@@ -61,11 +62,11 @@ const SORTED_SHIPMENTS = (extractedShipments as ExtractedShipmentRecord[])
 export function useEpodShipments() {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
-  const [statusVersion, setStatusVersion] = useState(0);
-
-  useEffect(() => subscribeShipmentStatusOverrides(() => setStatusVersion((value) => value + 1)), []);
-
-  const statusOverrides = useMemo(() => getShipmentStatusOverrides(), [statusVersion]);
+  const statusOverrides = useSyncExternalStore(
+    subscribeShipmentStatusOverrides,
+    getShipmentStatusOverrides,
+    () => EMPTY_STATUS_OVERRIDES,
+  );
 
   const scopedRecords = useMemo(() => {
     if (user?.role === 'Transporter') {

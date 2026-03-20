@@ -267,20 +267,25 @@ export async function processEpodFiles(
 }
 
 export async function createEpodWorkflow(result: EpodProcessResult): Promise<EpodWorkflowResult> {
-  const response = await fetch('/api/epod/workflow', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(result),
-  });
+  try {
+    const response = await fetch('/api/epod/workflow', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(result),
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(err.error || 'Failed to create review workflow');
+    if (!response.ok) {
+      throw new Error((await response.json().catch(() => ({ error: response.statusText }))).error || 'Failed to create review workflow');
+    }
+
+    const workflow = await response.json();
+    createLocalWorkflow(result, workflow.batchId);
+    return workflow;
+  } catch {
+    return createLocalWorkflow(result);
   }
-
-  return response.json();
 }
 
 export async function applyEpodWorkflowAction(input: {
@@ -294,20 +299,27 @@ export async function applyEpodWorkflowAction(input: {
   exceptionId?: string;
   ocrPatch?: ProcessedOcrPatch;
 }): Promise<EpodWorkflowResult> {
-  const response = await fetch('/api/epod/workflow/action', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(input),
-  });
+  try {
+    const response = await fetch('/api/epod/workflow/action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(err.error || 'Failed to update review workflow');
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      if (/Workflow batch not found|Method not allowed|Not Found/i.test(err.error || '')) {
+        return applyLocalWorkflowAction(input);
+      }
+      throw new Error(err.error || 'Failed to update review workflow');
+    }
+
+    return response.json();
+  } catch {
+    return applyLocalWorkflowAction(input);
   }
-
-  return response.json();
 }
 
 export async function createEpodSubmissionJob(input: {
@@ -317,59 +329,96 @@ export async function createEpodSubmissionJob(input: {
   createdBy?: string;
   itemIds?: string[];
 }): Promise<EpodSubmissionJob> {
-  const response = await fetch('/api/epod/submission', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(input),
-  });
+  try {
+    const response = await fetch('/api/epod/submission', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(err.error || 'Failed to create submission job');
+    if (!response.ok) {
+      throw new Error((await response.json().catch(() => ({ error: response.statusText }))).error || 'Failed to create submission job');
+    }
+
+    const job = await response.json();
+    createLocalSubmissionJob({ batchId: input.batchId, itemIds: input.itemIds }, job.jobId);
+    return job;
+  } catch {
+    return createLocalSubmissionJob({ batchId: input.batchId, itemIds: input.itemIds });
   }
-
-  return response.json();
 }
 
 export async function getEpodSubmissionJob(jobId: string): Promise<EpodSubmissionJob> {
-  const response = await fetch(`/api/epod/submission/${jobId}`);
+  try {
+    const response = await fetch(`/api/epod/submission/${jobId}`);
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(err.error || 'Failed to fetch submission job');
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      if (/Submission job not found|Method not allowed|Not Found/i.test(err.error || '')) {
+        const local = getLocalSubmissionJob(jobId);
+        if (local) return local;
+      }
+      throw new Error(err.error || 'Failed to fetch submission job');
+    }
+
+    return response.json();
+  } catch {
+    const local = getLocalSubmissionJob(jobId);
+    if (local) return local;
+    throw new Error('Failed to fetch submission job');
   }
-
-  return response.json();
 }
 
 export async function resubmitEpodSubmissionJob(jobId: string, itemIds?: string[]): Promise<EpodSubmissionJob> {
-  const response = await fetch(`/api/epod/submission/${jobId}/resubmit`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ itemIds }),
-  });
+  try {
+    const response = await fetch(`/api/epod/submission/${jobId}/resubmit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ itemIds }),
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(err.error || 'Failed to resubmit submission job');
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      if (/Submission job not found|Method not allowed|Not Found/i.test(err.error || '')) {
+        return resubmitLocalSubmissionJob(jobId, itemIds);
+      }
+      throw new Error(err.error || 'Failed to resubmit submission job');
+    }
+
+    return response.json();
+  } catch {
+    return resubmitLocalSubmissionJob(jobId, itemIds);
   }
-
-  return response.json();
 }
 
 export async function cancelEpodSubmissionJob(jobId: string): Promise<EpodSubmissionJob> {
-  const response = await fetch(`/api/epod/submission/${jobId}/cancel`, {
-    method: 'POST',
-  });
+  try {
+    const response = await fetch(`/api/epod/submission/${jobId}/cancel`, {
+      method: 'POST',
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(err.error || 'Failed to cancel submission job');
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      if (/Submission job not found|Method not allowed|Not Found/i.test(err.error || '')) {
+        return cancelLocalSubmissionJob(jobId);
+      }
+      throw new Error(err.error || 'Failed to cancel submission job');
+    }
+
+    return response.json();
+  } catch {
+    return cancelLocalSubmissionJob(jobId);
   }
-
-  return response.json();
 }
+import {
+  applyLocalWorkflowAction,
+  cancelLocalSubmissionJob,
+  createLocalSubmissionJob,
+  createLocalWorkflow,
+  getLocalSubmissionJob,
+  resubmitLocalSubmissionJob,
+} from './epodClientStore';

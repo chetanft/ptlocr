@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Breadcrumb,
@@ -25,6 +25,7 @@ import {
   type EpodSubmissionJob,
   type EpodSubmissionJobItem,
 } from '@/lib/epodApi';
+import { markShipmentsApproved } from '@/lib/epod/shipmentStatusStore';
 import { rem14 } from '@/lib/rem';
 
 function JobKpi({ label, value, color }: { label: string; value: number; color: string }) {
@@ -51,6 +52,7 @@ export default function EpodSubmissionJobPage() {
   const epodUploadPath = getEpodUploadPathForRole(role);
   const [job, setJob] = useState<EpodSubmissionJob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const completedJobsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!jobId) {
@@ -93,6 +95,23 @@ export default function EpodSubmissionJobPage() {
       }
     };
   }, [job?.status, jobId]);
+
+  useEffect(() => {
+    if (!job || job.status !== 'success') {
+      return;
+    }
+
+    if (completedJobsRef.current.has(job.jobId)) {
+      return;
+    }
+
+    completedJobsRef.current.add(job.jobId);
+    markShipmentsApproved(
+      job.items
+        .filter((item) => item.status === 'Submitted')
+        .map((item) => item.awbNumber),
+    );
+  }, [job]);
 
   const handleCancelJob = async () => {
     if (!jobId) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, Button } from 'ft-design-system';
 import { useAuth } from '@/auth/AuthContext';
@@ -11,6 +11,7 @@ import { EpodPageHeader } from '@/components/epod/layout/EpodPageHeader';
 import { EpodPageShell } from '@/components/epod/layout/EpodPageShell';
 import { EpodStickyFooter } from '@/components/epod/layout/EpodStickyFooter';
 import { EpodProcessDetailDrawer } from '@/components/epod/process/EpodProcessDetailDrawer';
+import { EpodImagePreviewModal } from '@/components/epod/process/EpodImagePreviewModal';
 import { EpodReviewKpiGrid } from '@/components/epod/review/EpodReviewKpiGrid';
 import { EpodReviewResultsTable } from '@/components/epod/review/EpodReviewResultsTable';
 import { EpodSubmissionStatusScreen } from '@/components/epod/submission/EpodSubmissionStatusScreen';
@@ -35,13 +36,57 @@ import { rem14 } from '@/lib/rem';
 
 const STEPS = ['Upload Images', 'Process Images', 'Review'] as const;
 type SubmissionUiState = 'idle' | 'submitting' | 'submitted_success' | 'submitted_failed';
+type PreviewKind = 'image' | 'pdf' | 'other';
+
+type EpodImagePreview = {
+  fileName: string;
+  previewUrl: string;
+  previewKind: PreviewKind;
+};
+
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif']);
+
+function getSubmissionUiState(job: EpodSubmissionJob): SubmissionUiState {
+  if (job.status === 'in_progress') {
+    return 'submitting';
+  }
+
+  return job.failedCount === 0 ? 'submitted_success' : 'submitted_failed';
+}
+
+function normalizeFileName(fileName: string): string {
+  return fileName.trim().toLowerCase();
+}
+
+function getPreviewKind(file: File): PreviewKind {
+  const mimeType = file.type.toLowerCase();
+  if (mimeType.startsWith('image/')) {
+    return 'image';
+  }
+
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (IMAGE_EXTENSIONS.has(extension)) {
+    return 'image';
+  }
+
+  if (extension === 'pdf' || mimeType === 'application/pdf') {
+    return 'pdf';
+  }
+
+  return 'other';
+}
 
 function createUploadFile(file: File): EpodUploadFile {
+  const previewKind = getPreviewKind(file);
+  const isImage = previewKind === 'image';
   return {
     id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
     file,
     progress: 100,
     status: 'uploaded',
+    previewKind,
+    previewUrl: isImage ? URL.createObjectURL(file) : undefined,
+    normalizedFileName: normalizeFileName(file.name),
   };
 }
 
@@ -50,7 +95,7 @@ export default function EpodUploadPage() {
   const location = useLocation();
   const { user } = useAuth();
   const routeState = location.state as EpodUploadRouteState | null;
-  const selectedShipments = routeState?.selectedShipments ?? [];
+  const selectedShipments = useMemo(() => routeState?.selectedShipments ?? [], [routeState]);
   const uploadMode = routeState?.uploadMode ?? (selectedShipments.length > 0 ? 'selection' : 'bulk');
   const epodListPath = getEpodListPathForRole(user?.role ?? 'Transporter');
   const actor = user?.role === 'Ops' ? 'ops' : user?.role === 'Reviewer' ? 'reviewer' : 'transporter';
@@ -76,7 +121,9 @@ export default function EpodUploadPage() {
   const [processingStage, setProcessingStage] = useState(0);
   const [submissionState, setSubmissionState] = useState<SubmissionUiState>('idle');
   const [submissionJob, setSubmissionJob] = useState<EpodSubmissionJob | null>(null);
+  const [imagePreview, setImagePreview] = useState<EpodImagePreview | null>(null);
   const completedSubmissionJobsRef = useRef<Set<string>>(new Set());
+  const filesRef = useRef<EpodUploadFile[]>([]);
 
   const { processAsync, result, isProcessing, error: processError, progress, reset: resetProcess } = useEpodProcess();
   const isActivelyProcessing = isProcessing || selectionProcessing;
@@ -87,6 +134,20 @@ export default function EpodUploadPage() {
       setWorkingItems(result.items);
     }
   }, [result]);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  useEffect(() => {
+    return () => {
+      for (const file of filesRef.current) {
+        if (file.previewUrl) {
+          URL.revokeObjectURL(file.previewUrl);
+        }
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isActivelyProcessing) {
@@ -114,7 +175,54 @@ export default function EpodUploadPage() {
     }, 700);
 
     return () => window.clearInterval(interval);
-  }, [isActivelyProcessing, progress.completed, progress.total, uploadMode]);
+  }, [isActivelyProcessing, progress.completed, progress.stage, progress.total, uploadMode]);
+
+  const previewLookup = useMemo(() => {
+    const lookup = new Map<string, EpodUploadFile[]>();
+
+    for (const file of files) {
+      const key = file.normalizedFileName ?? normalizeFileName(file.file.name);
+      const existing = lookup.get(key) ?? [];
+      existing.push(file);
+      lookup.set(key, existing);
+    }
+
+    return lookup;
+  }, [files]);
+
+  const resolvePreviewForFileName = useCallback((fileName: string): EpodImagePreview | null => {
+    const matches = previewLookup.get(normalizeFileName(fileName));
+    const previewFile = matches?.find((file) => file.previewKind === 'image' && Boolean(file.previewUrl));
+
+    if (!previewFile || !previewFile.previewUrl) {
+      return null;
+    }
+
+    return {
+      fileName: previewFile.file.name,
+      previewUrl: previewFile.previewUrl,
+      previewKind: previewFile.previewKind ?? 'other',
+    };
+  }, [previewLookup]);
+
+  const openImagePreview = (preview: EpodImagePreview) => {
+    if (preview.previewKind !== 'image') {
+      return;
+    }
+
+    setImagePreview(preview);
+  };
+
+  const openImagePreviewForFileName = (fileName: string) => {
+    const preview = resolvePreviewForFileName(fileName);
+    if (preview) {
+      openImagePreview(preview);
+    }
+  };
+
+  const handlePreviewItem = (item: ProcessedItem) => {
+    openImagePreviewForFileName(item.fileName);
+  };
 
   const processCounts = useMemo(
     () => ({
@@ -145,6 +253,10 @@ export default function EpodUploadPage() {
   const selectedProcessItem = useMemo(
     () => workingItems.find((item) => item.id === selectedProcessItemId) ?? null,
     [selectedProcessItemId, workingItems],
+  );
+  const selectedProcessPreview = useMemo(
+    () => (selectedProcessItem ? resolvePreviewForFileName(selectedProcessItem.fileName) : null),
+    [resolvePreviewForFileName, selectedProcessItem],
   );
   const reviewItems = useMemo(
     () => workingItems.filter((item) => item.statusLabel !== 'Unmapped'),
@@ -186,14 +298,12 @@ export default function EpodUploadPage() {
           return;
         }
         setSubmissionJob(nextJob);
-        if (nextJob.status === 'success') {
-          setSubmissionState('submitted_success');
-        } else if (nextJob.status === 'failed' || nextJob.status === 'cancelled') {
-          setSubmissionState('submitted_failed');
+        if (nextJob.status !== 'in_progress') {
+          setSubmissionState(getSubmissionUiState(nextJob));
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
-          setWorkflowError(error?.message || 'Failed to track submission progress');
+          setWorkflowError(error instanceof Error ? error.message : 'Failed to track submission progress');
         }
       }
     }, 1000);
@@ -209,7 +319,7 @@ export default function EpodUploadPage() {
       return;
     }
 
-    if (submissionState !== 'submitted_success' && submissionState !== 'submitted_failed') {
+    if (submissionState !== 'submitted_success') {
       return;
     }
 
@@ -231,7 +341,16 @@ export default function EpodUploadPage() {
   };
 
   const handleRemoveFile = (id: string) => {
+    const removedFile = files.find((file) => file.id === id) ?? null;
     setFiles((previous) => previous.filter((file) => file.id !== id));
+
+    if (removedFile?.previewUrl) {
+      URL.revokeObjectURL(removedFile.previewUrl);
+    }
+
+    if (imagePreview?.previewUrl === removedFile?.previewUrl) {
+      setImagePreview(null);
+    }
   };
 
   const handleUploadAndProcess = async () => {
@@ -292,15 +411,9 @@ export default function EpodUploadPage() {
         itemIds,
       });
       setSubmissionJob(job);
-      if (job.status === 'success') {
-        setSubmissionState('submitted_success');
-      } else if (job.status === 'failed' || job.status === 'cancelled') {
-        setSubmissionState('submitted_failed');
-      } else {
-        setSubmissionState('submitting');
-      }
-    } catch (error: any) {
-      setWorkflowError(error?.message || 'Failed to submit reviewed ePODs');
+      setSubmissionState(getSubmissionUiState(job));
+    } catch (error: unknown) {
+      setWorkflowError(error instanceof Error ? error.message : 'Failed to submit reviewed ePODs');
     }
   };
 
@@ -328,8 +441,8 @@ export default function EpodUploadPage() {
         actionType: 'document',
         documentAction: action,
       });
-    } catch (error: any) {
-      setWorkflowError(error?.message || 'Failed to update workflow');
+    } catch (error: unknown) {
+      setWorkflowError(error instanceof Error ? error.message : 'Failed to update workflow');
     }
   };
 
@@ -346,8 +459,8 @@ export default function EpodUploadPage() {
         actionType: 'ocr-update',
         ocrPatch,
       });
-    } catch (error: any) {
-      setWorkflowError(error?.message || 'Failed to save OCR edits');
+    } catch (error: unknown) {
+      setWorkflowError(error instanceof Error ? error.message : 'Failed to save OCR edits');
     }
   };
 
@@ -365,8 +478,8 @@ export default function EpodUploadPage() {
         lineId,
         reviewAction,
       });
-    } catch (error: any) {
-      setWorkflowError(error?.message || 'Failed to update workflow');
+    } catch (error: unknown) {
+      setWorkflowError(error instanceof Error ? error.message : 'Failed to update workflow');
     }
   };
 
@@ -383,8 +496,8 @@ export default function EpodUploadPage() {
         actionType: 'line-override',
         lineId,
       });
-    } catch (error: any) {
-      setWorkflowError(error?.message || 'Failed to update workflow');
+    } catch (error: unknown) {
+      setWorkflowError(error instanceof Error ? error.message : 'Failed to update workflow');
     }
   };
 
@@ -401,8 +514,8 @@ export default function EpodUploadPage() {
         actionType: 'exception-resolve',
         exceptionId,
       });
-    } catch (error: any) {
-      setWorkflowError(error?.message || 'Failed to update workflow');
+    } catch (error: unknown) {
+      setWorkflowError(error instanceof Error ? error.message : 'Failed to update workflow');
     }
   };
 
@@ -465,7 +578,7 @@ export default function EpodUploadPage() {
         activeFilter={activeProcessFilter}
         onFilterChange={setActiveProcessFilter}
       />
-      <EpodReviewResultsTable mode="process" items={filteredItems} onView={handleOpenView} />
+      <EpodReviewResultsTable mode="process" items={filteredItems} onView={handleOpenView} onPreview={handlePreviewItem} />
     </>
   ) : null;
   const reviewSurface = processResult ? (
@@ -554,7 +667,11 @@ export default function EpodUploadPage() {
         onLineReview={handleLineReview}
         onLineOverride={handleLineOverride}
         onResolveException={handleResolveException}
+        previewUrl={selectedProcessPreview?.previewUrl ?? null}
+        canPreview={Boolean(selectedProcessPreview?.previewUrl)}
+        onPreview={selectedProcessItem ? () => openImagePreviewForFileName(selectedProcessItem.fileName) : undefined}
       />
+      <EpodImagePreviewModal open={Boolean(imagePreview)} preview={imagePreview} onOpenChange={(open) => !open && setImagePreview(null)} />
     </div>
   );
 

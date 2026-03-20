@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import {
   Alert,
   Button,
@@ -25,7 +25,9 @@ interface LoginFormPanelProps {
   onClearError: () => void;
 }
 
-const ROLE_VALUES: AppRole[] = ["Transporter", "Ops", "Reviewer"];
+type LoginPersona = "Shipper" | "Transporter";
+
+const PERSONA_VALUES: LoginPersona[] = ["Shipper", "Transporter"];
 
 const DEFAULT_ROLE_EMAILS: Record<AppRole, string> = {
   Transporter: "epod@mec.com",
@@ -33,11 +35,25 @@ const DEFAULT_ROLE_EMAILS: Record<AppRole, string> = {
   Reviewer: "reviewer@mdclabs.com",
 };
 
-const ROLE_HINTS: Record<AppRole, string[]> = {
-  Transporter: ["epod@mec.com", "epod@omlogistics.com", "epod@safeexpress.com"],
-  Ops: ["ops@mdclabs.com"],
-  Reviewer: ["reviewer@mdclabs.com"],
+const PERSONA_DEFAULT_EMAILS: Record<LoginPersona, string> = {
+  Shipper: DEFAULT_ROLE_EMAILS.Ops,
+  Transporter: DEFAULT_ROLE_EMAILS.Transporter,
 };
+
+const PERSONA_HINTS: Record<LoginPersona, string[]> = {
+  Shipper: [DEFAULT_ROLE_EMAILS.Ops, DEFAULT_ROLE_EMAILS.Reviewer],
+  Transporter: ["epod@mec.com", "epod@omlogistics.com", "epod@safeexpress.com"],
+};
+
+function resolveRoleFromPersona(persona: LoginPersona, username: string): AppRole {
+  if (persona === "Transporter") {
+    return "Transporter";
+  }
+
+  return username.trim().toLowerCase() === DEFAULT_ROLE_EMAILS.Reviewer.toLowerCase()
+    ? "Reviewer"
+    : "Ops";
+}
 
 export function LoginFormPanel({
   onSubmit,
@@ -45,26 +61,23 @@ export function LoginFormPanel({
   error,
   onClearError,
 }: LoginFormPanelProps) {
+  const [selectedPersona, setSelectedPersona] = useState<LoginPersona>("Shipper");
   const [formData, setFormData] = useState<LoginCredentials>({
-    username: DEFAULT_ROLE_EMAILS.Transporter,
+    username: DEFAULT_ROLE_EMAILS.Ops,
     password: "password123",
-    role: "Transporter",
+    role: "Ops",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const roleLabel = useMemo(() => {
-    if (formData.role === "Transporter") return "Transporter";
-    if (formData.role === "Ops") return "Ops";
-    return "Reviewer";
-  }, [formData.role]);
-
   const handleRoleChange = (value: string) => {
-    const role = value as AppRole;
+    const persona = value as LoginPersona;
+    const role = persona === "Transporter" ? "Transporter" : "Ops";
+    setSelectedPersona(persona);
     setFormData({
       role,
-      username: DEFAULT_ROLE_EMAILS[role],
+      username: PERSONA_DEFAULT_EMAILS[persona],
       password: "password123",
     });
     setFormError(null);
@@ -86,7 +99,10 @@ export function LoginFormPanel({
       return;
     }
 
-    await onSubmit(formData);
+    await onSubmit({
+      ...formData,
+      role: resolveRoleFromPersona(selectedPersona, formData.username),
+    });
   };
 
   return (
@@ -119,7 +135,7 @@ export function LoginFormPanel({
           </Typography>
 
           <SegmentedTabs
-            value={formData.role}
+            value={selectedPersona}
             onChange={handleRoleChange}
             style={{
               backgroundColor: "var(--bg-secondary)",
@@ -128,8 +144,8 @@ export function LoginFormPanel({
               height: rem14(48),
             }}
           >
-            {ROLE_VALUES.map((role) => (
-              <SegmentedTabItem key={role} value={role} label={role} />
+            {PERSONA_VALUES.map((persona) => (
+              <SegmentedTabItem key={persona} value={persona} label={persona} />
             ))}
           </SegmentedTabs>
         </div>
@@ -145,7 +161,7 @@ export function LoginFormPanel({
         >
           <div style={{ display: "flex", flexDirection: "column", gap: rem14(20) }}>
             <Alert variant="info">
-              Sign in as {roleLabel} with {ROLE_HINTS[formData.role].join(", ")} / `password123`
+              Sign in as {selectedPersona} with {PERSONA_HINTS[selectedPersona].join(", ")} / `password123`
             </Alert>
 
             <Input size="lg" variant="default">

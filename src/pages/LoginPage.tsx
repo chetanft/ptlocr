@@ -13,9 +13,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
-    const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-    navigate(from || getDefaultRouteForRole(user.role), { replace: true });
-  }, [isAuthenticated, user, location.state, navigate]);
+    navigate(getDefaultRouteForRole(user.role), { replace: true });
+  }, [isAuthenticated, navigate, user]);
 
   const handleSubmit = async (credentials: LoginCredentials) => {
     await login(credentials);

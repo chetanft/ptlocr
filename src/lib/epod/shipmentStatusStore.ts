@@ -1,9 +1,13 @@
 const STORAGE_KEY = 'epod-shipment-status-overrides';
 const EVENT_NAME = 'epod-shipment-status-updated';
+const EMPTY_STATUS_OVERRIDES: ShipmentStatusMap = {};
 
 export type EpodShipmentStatus = 'Pending Submission' | 'Pending Approval' | 'Rejected' | 'Approved';
 
 type ShipmentStatusMap = Record<string, EpodShipmentStatus>;
+
+let cachedStatusOverrides: ShipmentStatusMap = EMPTY_STATUS_OVERRIDES;
+let cachedRawStatusOverrides: string | null = null;
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -11,14 +15,29 @@ function canUseStorage() {
 
 export function getShipmentStatusOverrides(): ShipmentStatusMap {
   if (!canUseStorage()) {
-    return {};
+    return cachedStatusOverrides;
   }
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ShipmentStatusMap) : {};
+    if (!raw) {
+      cachedRawStatusOverrides = null;
+      cachedStatusOverrides = EMPTY_STATUS_OVERRIDES;
+      return cachedStatusOverrides;
+    }
+
+    if (raw === cachedRawStatusOverrides) {
+      return cachedStatusOverrides;
+    }
+
+    const parsed = JSON.parse(raw) as ShipmentStatusMap;
+    cachedRawStatusOverrides = raw;
+    cachedStatusOverrides = parsed;
+    return cachedStatusOverrides;
   } catch {
-    return {};
+    cachedRawStatusOverrides = null;
+    cachedStatusOverrides = EMPTY_STATUS_OVERRIDES;
+    return cachedStatusOverrides;
   }
 }
 
@@ -27,7 +46,9 @@ function setShipmentStatusOverrides(next: ShipmentStatusMap) {
     return;
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  cachedRawStatusOverrides = JSON.stringify(next);
+  cachedStatusOverrides = next;
+  window.localStorage.setItem(STORAGE_KEY, cachedRawStatusOverrides);
   window.dispatchEvent(new CustomEvent(EVENT_NAME));
 }
 

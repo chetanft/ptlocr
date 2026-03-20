@@ -30,18 +30,26 @@ const REVIEW_KPI_CONFIG = [
   { key: 'skippedCount', label: 'Skipped', tone: 'danger', filter: 'skipped' },
 ] as const;
 
+const STATUS_VALUE_COLORS = {
+  primary: '#44526B',
+  success: '#00C73C',
+  warning: '#FF5A1F',
+  danger: '#FF3B30',
+  secondary: '#8B96A8',
+} as const;
+
 function getValueColor(tone: string) {
   switch (tone) {
     case 'success':
-      return 'var(--semantic-success-600)';
+      return STATUS_VALUE_COLORS.success;
     case 'warning':
-      return 'var(--semantic-warning-600)';
+      return STATUS_VALUE_COLORS.warning;
     case 'danger':
-      return 'var(--semantic-danger-600)';
+      return STATUS_VALUE_COLORS.danger;
     case 'secondary':
-      return 'var(--text-secondary)';
+      return STATUS_VALUE_COLORS.secondary;
     default:
-      return 'var(--text-primary)';
+      return STATUS_VALUE_COLORS.primary;
   }
 }
 

@@ -58,6 +58,9 @@ interface EpodProcessDetailDrawerProps {
   onLineReview: (lineId: string, action: 'ACCEPTED' | 'REJECTED') => void;
   onLineOverride: (lineId: string) => void;
   onResolveException: (exceptionId: string) => void;
+  previewUrl?: string | null;
+  canPreview?: boolean;
+  onPreview?: () => void;
 }
 
 function renderValue(value: string | number | null | undefined) {
@@ -163,6 +166,9 @@ export function EpodProcessDetailDrawer({
   onLineReview,
   onLineOverride,
   onResolveException,
+  previewUrl,
+  canPreview,
+  onPreview,
 }: EpodProcessDetailDrawerProps) {
   const readOnly = role === 'Transporter';
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
@@ -182,6 +188,7 @@ export function EpodProcessDetailDrawer({
   const deliveryReviewStatus = draft?.deliveryReviewStatus ?? null;
   const isClean = deliveryReviewStatus === 'clean';
   const isUnclean = deliveryReviewStatus === 'unclean';
+  const showPreview = Boolean(previewUrl && canPreview !== false);
 
   if (!item || !draft) {
     return null;
@@ -252,138 +259,190 @@ export function EpodProcessDetailDrawer({
               </TabsList>
 
               <TabsContent value="overview">
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
-                    <Typography variant="title-secondary" color="primary">
-                      Shipment data in system
-                    </Typography>
-                    <div className="flex flex-col" style={{ gap: rem14(12) }}>
-                      {(
-                        [
-                          ['AWB Number', item.systemData.awbNumber],
-                          ['Shipment ID', item.systemData.shipmentId],
-                          ['From', item.systemData.fromName],
-                          ['From city', item.systemData.fromSubtext],
-                          ['To', item.systemData.toName],
-                          ['To city', item.systemData.toSubtext],
-                          ['Transporter', item.systemData.transporter],
-                          ['Delivered Date', item.systemData.deliveredDate],
-                        ] as const
-                      ).map(([label, value]) => (
-                        <div key={label} className="flex flex-col gap-1">
-                          <span className="font-sans text-sm-rem font-medium leading-[1.4] text-[var(--tertiary)]">
-                            {label}
-                          </span>
-                          <span className="font-sans text-sm-rem font-normal leading-[1.4] text-[var(--primary)] whitespace-pre-wrap">
-                            {renderValue(value)}
-                          </span>
+                <div className="flex flex-col gap-4">
+                  {showPreview ? (
+                    onPreview ? (
+                      <button
+                        type="button"
+                        onClick={onPreview}
+                        className="group flex w-full items-center gap-4 rounded-xl border border-border-primary bg-[var(--bg-secondary)] p-4 text-left transition-colors hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/40"
+                      >
+                        <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-border-primary bg-[var(--bg-primary)]">
+                          <img
+                            src={previewUrl ?? undefined}
+                            alt={item.fileName}
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                          />
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <Typography variant="body-primary-medium" color="primary">
+                            Preview uploaded image
+                          </Typography>
+                          <Typography variant="body-secondary-regular" color="secondary" className="truncate">
+                            {item.fileName}
+                          </Typography>
+                          <Typography variant="body-secondary-regular" color="tertiary">
+                            Click to open the full-size preview
+                          </Typography>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="group flex w-full items-center gap-4 rounded-xl border border-border-primary bg-[var(--bg-secondary)] p-4 text-left">
+                        <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-border-primary bg-[var(--bg-primary)]">
+                          <img
+                            src={previewUrl ?? undefined}
+                            alt={item.fileName}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <Typography variant="body-primary-medium" color="primary">
+                            Preview uploaded image
+                          </Typography>
+                          <Typography variant="body-secondary-regular" color="secondary" className="truncate">
+                            {item.fileName}
+                          </Typography>
+                          <Typography variant="body-secondary-regular" color="tertiary">
+                            Preview handler unavailable
+                          </Typography>
+                        </div>
+                      </div>
+                    )
+                  ) : null}
 
-                  <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
-                    <Typography variant="title-secondary" color="primary">OCR extracted POD data</Typography>
-                    <Input>
-                      <InputLabel>Extracted AWB</InputLabel>
-                      <InputField
-                        value={draft.extractedAwb ?? ''}
-                        onChange={(event) => updateDraft({ extractedAwb: event.target.value || null })}
-                        disabled={readOnly}
-                      />
-                    </Input>
-                    <Input>
-                      <InputLabel>Extracted Consignee</InputLabel>
-                      <InputField
-                        value={draft.extractedConsignee ?? ''}
-                        onChange={(event) => updateDraft({ extractedConsignee: event.target.value || null })}
-                        disabled={readOnly}
-                      />
-                    </Input>
-                    <Input>
-                      <InputLabel>Extracted Delivery Date</InputLabel>
-                      <InputField
-                        value={draft.extractedDeliveryDate ?? ''}
-                        onChange={(event) => updateDraft({ extractedDeliveryDate: event.target.value || null })}
-                        disabled={readOnly}
-                      />
-                    </Input>
-                    <Input>
-                      <InputLabel>Extracted From</InputLabel>
-                      <InputField
-                        value={draft.extractedFrom ?? ''}
-                        onChange={(event) => updateDraft({ extractedFrom: event.target.value || null })}
-                        disabled={readOnly}
-                      />
-                    </Input>
-                    <Input>
-                      <InputLabel>Extracted To</InputLabel>
-                      <InputField
-                        value={draft.extractedTo ?? ''}
-                        onChange={(event) => updateDraft({ extractedTo: event.target.value || null })}
-                        disabled={readOnly}
-                      />
-                    </Input>
-                    <div className="grid grid-cols-2 gap-4">
-                      <label className="flex items-center gap-2">
-                        <CheckboxInput
-                          checked={draft.stampPresent ?? false}
-                          onChange={(event) => updateDraft({ stampPresent: event.target.checked })}
-                          disabled={readOnly}
-                        />
-                        <Typography variant="body-secondary-regular" color="primary">Stamp present</Typography>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <CheckboxInput
-                          checked={draft.signaturePresent ?? false}
-                          onChange={(event) => updateDraft({ signaturePresent: event.target.checked })}
-                          disabled={readOnly}
-                        />
-                        <Typography variant="body-secondary-regular" color="primary">Signature present</Typography>
-                      </label>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Typography variant="body-primary-medium" color="primary">Delivery review outcome</Typography>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          variant={isClean ? 'primary' : 'text'}
-                          size="sm"
-                          onClick={() => updateDraft({ deliveryReviewStatus: 'clean' })}
-                          disabled={readOnly}
-                        >
-                          Clean delivery
-                        </Button>
-                        <Button
-                          variant={isUnclean ? 'primary' : 'text'}
-                          size="sm"
-                          onClick={() => updateDraft({ deliveryReviewStatus: 'unclean' })}
-                          disabled={readOnly}
-                        >
-                          Unclean delivery
-                        </Button>
-                        {deliveryReviewStatus ? (
-                          <Badge variant={deliveryReviewStatus === 'clean' ? 'success' : 'warning'}>
-                            {deliveryReviewStatus === 'clean' ? 'Clean' : 'Unclean'}
-                          </Badge>
-                        ) : null}
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
+                      <Typography variant="title-secondary" color="primary">
+                        Shipment data in system
+                      </Typography>
+                      <div className="flex flex-col" style={{ gap: rem14(12) }}>
+                        {(
+                          [
+                            ['AWB Number', item.systemData.awbNumber],
+                            ['Shipment ID', item.systemData.shipmentId],
+                            ['From', item.systemData.fromName],
+                            ['From city', item.systemData.fromSubtext],
+                            ['To', item.systemData.toName],
+                            ['To city', item.systemData.toSubtext],
+                            ['Transporter', item.systemData.transporter],
+                            ['Delivered Date', item.systemData.deliveredDate],
+                          ] as const
+                        ).map(([label, value]) => (
+                          <div key={label} className="flex flex-col gap-1">
+                            <span className="font-sans text-sm-rem font-medium leading-[1.4] text-[var(--tertiary)]">
+                              {label}
+                            </span>
+                            <span className="font-sans text-sm-rem font-normal leading-[1.4] text-[var(--primary)] whitespace-pre-wrap">
+                              {renderValue(value)}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <Textarea>
-                      <TextareaLabel>Remarks</TextareaLabel>
-                      <TextareaField
-                        value={draft.remarks ?? ''}
-                        onChange={(event) => updateDraft({ remarks: event.target.value || null })}
-                        disabled={readOnly}
-                      />
-                    </Textarea>
-                    <Textarea>
-                      <TextareaLabel>Condition Notes</TextareaLabel>
-                      <TextareaField
-                        value={draft.conditionNotes ?? ''}
-                        onChange={(event) => updateDraft({ conditionNotes: event.target.value || null })}
-                        disabled={readOnly}
-                      />
-                    </Textarea>
+
+                    <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
+                      <Typography variant="title-secondary" color="primary">OCR extracted POD data</Typography>
+                      <Input>
+                        <InputLabel>Extracted AWB</InputLabel>
+                        <InputField
+                          value={draft.extractedAwb ?? ''}
+                          onChange={(event) => updateDraft({ extractedAwb: event.target.value || null })}
+                          disabled={readOnly}
+                        />
+                      </Input>
+                      <Input>
+                        <InputLabel>Extracted Consignee</InputLabel>
+                        <InputField
+                          value={draft.extractedConsignee ?? ''}
+                          onChange={(event) => updateDraft({ extractedConsignee: event.target.value || null })}
+                          disabled={readOnly}
+                        />
+                      </Input>
+                      <Input>
+                        <InputLabel>Extracted Delivery Date</InputLabel>
+                        <InputField
+                          value={draft.extractedDeliveryDate ?? ''}
+                          onChange={(event) => updateDraft({ extractedDeliveryDate: event.target.value || null })}
+                          disabled={readOnly}
+                        />
+                      </Input>
+                      <Input>
+                        <InputLabel>Extracted From</InputLabel>
+                        <InputField
+                          value={draft.extractedFrom ?? ''}
+                          onChange={(event) => updateDraft({ extractedFrom: event.target.value || null })}
+                          disabled={readOnly}
+                        />
+                      </Input>
+                      <Input>
+                        <InputLabel>Extracted To</InputLabel>
+                        <InputField
+                          value={draft.extractedTo ?? ''}
+                          onChange={(event) => updateDraft({ extractedTo: event.target.value || null })}
+                          disabled={readOnly}
+                        />
+                      </Input>
+                      <div className="grid grid-cols-2 gap-4">
+                        <label className="flex items-center gap-2">
+                          <CheckboxInput
+                            checked={draft.stampPresent ?? false}
+                            onChange={(event) => updateDraft({ stampPresent: event.target.checked })}
+                            disabled={readOnly}
+                          />
+                          <Typography variant="body-secondary-regular" color="primary">Stamp present</Typography>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <CheckboxInput
+                            checked={draft.signaturePresent ?? false}
+                            onChange={(event) => updateDraft({ signaturePresent: event.target.checked })}
+                            disabled={readOnly}
+                          />
+                          <Typography variant="body-secondary-regular" color="primary">Signature present</Typography>
+                        </label>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Typography variant="body-primary-medium" color="primary">Delivery review outcome</Typography>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant={isClean ? 'primary' : 'text'}
+                            size="sm"
+                            onClick={() => updateDraft({ deliveryReviewStatus: 'clean' })}
+                            disabled={readOnly}
+                          >
+                            Clean delivery
+                          </Button>
+                          <Button
+                            variant={isUnclean ? 'primary' : 'text'}
+                            size="sm"
+                            onClick={() => updateDraft({ deliveryReviewStatus: 'unclean' })}
+                            disabled={readOnly}
+                          >
+                            Unclean delivery
+                          </Button>
+                          {deliveryReviewStatus ? (
+                            <Badge variant={deliveryReviewStatus === 'clean' ? 'success' : 'warning'}>
+                              {deliveryReviewStatus === 'clean' ? 'Clean' : 'Unclean'}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </div>
+                      <Textarea>
+                        <TextareaLabel>Remarks</TextareaLabel>
+                        <TextareaField
+                          value={draft.remarks ?? ''}
+                          onChange={(event) => updateDraft({ remarks: event.target.value || null })}
+                          disabled={readOnly}
+                        />
+                      </Textarea>
+                      <Textarea>
+                        <TextareaLabel>Condition Notes</TextareaLabel>
+                        <TextareaField
+                          value={draft.conditionNotes ?? ''}
+                          onChange={(event) => updateDraft({ conditionNotes: event.target.value || null })}
+                          disabled={readOnly}
+                        />
+                      </Textarea>
+                    </div>
                   </div>
                 </div>
               </TabsContent>

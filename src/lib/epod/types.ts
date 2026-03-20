@@ -14,7 +14,7 @@ export interface EpodShipmentRow {
   status: 'Pending Submission' | 'Pending Approval' | 'Rejected' | 'Approved';
 }
 
-export interface EpodSelectedShipment extends EpodShipmentRow {}
+export type EpodSelectedShipment = EpodShipmentRow;
 
 export interface EpodExtractedPodData {
   awb_number: string | null;
@@ -92,6 +92,9 @@ export interface EpodUploadFile {
   progress: number;
   status: 'queued' | 'uploaded' | 'error';
   error?: string;
+  previewUrl?: string;
+  previewKind?: 'image' | 'pdf' | 'other';
+  normalizedFileName?: string;
 }
 
 export interface EpodBatchJob {

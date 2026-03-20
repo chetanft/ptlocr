@@ -133,9 +133,7 @@ function getWorkflowItemResolution(item: EpodWorkflowItem) {
       ? 'Unmapped POD image'
       : item.statusLabel === 'Skipped'
         ? 'Skipped review row not eligible for submission'
-        : item.statusLabel === 'Needs Review' && !isManualMatch
-          ? 'Review not resolved'
-          : null;
+        : null;
 
   return {
     finalMatchStatus,
