@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 14px;
+  }
+
+  @media (max-width: 1280px) {
+    html {
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    html {
+      font-size: 12px;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    border-color: var(--border-primary);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--bg-secondary);
+    color: var(--primary-700);
+    font-family: var(--font-family-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--placeholder);
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
+
+/* CardBody: removed padding:0 override that was breaking Card padding globally */
+
+/* Card: ensure bordered Cards show their border */
+
+/* UserProfile: allow width to fit content (persisted from browser preview) */
+div.relative.inline-flex > div.box-border[class*="bg-[var(--bg-primary)]"][class*="rounded-[var(--radius-md)]"]:not([class*="w-[25rem]"]) {
+  width: fit-content !important;
+}
+
+/* UserProfile logo: clip MDC Labs SVG text overflow (bold glyphs extend past viewBox) */
+div.relative.inline-flex > div.box-border div[class*="9.6875rem"] {
+  overflow: hidden !important;
+  min-width: 0 !important;
+}
+div.relative.inline-flex > div.box-border div[class*="9.6875rem"] svg {
+  overflow: hidden !important;
+  display: block !important;
+  max-width: 100% !important;
+}
+
+/* UserProfileDropdown: add box-shadow (persisted from browser preview) */
+div.relative.inline-flex > div[class*="bg-[var(--bg-primary)]"][class*="w-[25rem]"] {
+  box-shadow: 4px 4px 12px 0px rgba(0, 0, 0, 0.12) !important;
+}

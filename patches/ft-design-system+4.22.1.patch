@@ -1,0 +1,108 @@
+diff --git a/node_modules/ft-design-system/dist/index.js b/node_modules/ft-design-system/dist/index.js
+index c7c2fc7..d22078c 100644
+--- a/node_modules/ft-design-system/dist/index.js
++++ b/node_modules/ft-design-system/dist/index.js
+@@ -17424,6 +17424,8 @@ const defaultContext$b = {
+     size: 'md',
+     setSize: () => { },
+     glass: undefined,
++    position: { top: 0, left: 0, width: 0 },
++    setPosition: () => { },
+ };
+ const useSelectContext = () => {
+     const context = React.useContext(SelectContext);
+@@ -17436,6 +17438,7 @@ const SelectContextProvider = ({ value, onValueChange, glass, children }) => {
+     const [open, setOpen] = React.useState(false);
+     const [selectedLabel, setSelectedLabel] = React.useState();
+     const [size, setSize] = React.useState('md');
++    const [position, setPosition] = React.useState({ top: 0, left: 0, width: 0 });
+     const handleOpenChange = React.useCallback((newOpen) => {
+         setOpen(newOpen);
+     }, []);
+@@ -17452,6 +17455,8 @@ const SelectContextProvider = ({ value, onValueChange, glass, children }) => {
+         size,
+         setSize: handleSetSize,
+         glass,
++        position,
++        setPosition,
+     };
+     return (jsxRuntime.jsx(SelectContext.Provider, { value: contextValue, children: children }));
+ };
+@@ -17500,17 +17505,16 @@ Select.displayName = 'Select';
+  * @public
+  */
+ const SelectTrigger = React.forwardRef(({ children, className, size = 'md', error = false, disabled = false, glass, ...props }, ref) => {
+-    const { open, onOpenChange, setSize, glass: contextGlass } = useSelectContext();
++    const { open, onOpenChange, setSize, setPosition, glass: contextGlass } = useSelectContext();
+     const resolvedGlass = useResolvedGlass(glass ?? contextGlass);
+     const triggerRef = React.useRef(null);
+-    const [position, setPosition] = React.useState({ top: 0, left: 0, width: 0 });
+     // Combine refs
+     React.useImperativeHandle(ref, () => triggerRef.current);
+     // Set size in context so SelectValue can access it
+     React.useEffect(() => {
+         setSize(size);
+     }, [size, setSize]);
+-    // Calculate position for dropdown
++    // Calculate position for dropdown (via context so SelectContent gets correct position when multiple Selects exist)
+     React.useEffect(() => {
+         if (open && triggerRef.current) {
+             const rect = triggerRef.current.getBoundingClientRect();
+@@ -17520,7 +17524,7 @@ const SelectTrigger = React.forwardRef(({ children, className, size = 'md', erro
+                 width: rect.width
+             });
+         }
+-    }, [open]);
++    }, [open, setPosition]);
+     const handleClick = () => {
+         if (!disabled) {
+             onOpenChange(!open);
+@@ -17535,11 +17539,11 @@ const SelectTrigger = React.forwardRef(({ children, className, size = 'md', erro
+         xl: 'h-component-xl text-md-rem px-[var(--spacing-x6)] py-[var(--spacing-x5)]',
+         xxl: 'h-component-xxl text-lg-rem px-[var(--spacing-x7)] py-[var(--spacing-x6)]'
+     };
+-    return (jsxRuntime.jsxs(jsxRuntime.Fragment, { children: [jsxRuntime.jsxs("button", { ref: triggerRef, type: "button", role: "combobox", "aria-expanded": open, "aria-haspopup": "listbox", disabled: disabled, onClick: handleClick, className: cn('relative w-full border transition-all duration-200 font-sans font-normal', resolvedGlass ? getGlassClasses(resolvedGlass, 'bg-surface', '') : 'bg-surface', 'text-[var(--primary)]', 'cursor-pointer flex items-center justify-between', sizeStyles[size], 'rounded-lg', error
++    return (jsxRuntime.jsxs("button", { ref: triggerRef, type: "button", role: "combobox", "aria-expanded": open, "aria-haspopup": "listbox", disabled: disabled, onClick: handleClick, className: cn('relative w-full border transition-all duration-200 font-sans font-normal', resolvedGlass ? getGlassClasses(resolvedGlass, 'bg-surface', '') : 'bg-surface', 'text-[var(--primary)]', 'cursor-pointer flex items-center justify-between', sizeStyles[size], 'rounded-lg', error
+                     ? 'border-critical focus-within:border-critical'
+                     : disabled
+                         ? 'bg-surface-alt dark:bg-surface-alt-dark border-border-disabled dark:border-border-disabled-dark text-input-disabled dark:text-input-disabled-dark cursor-not-allowed'
+-                        : 'border-[var(--border-primary)] dark:border-border-dark hover:border-[var(--primary)] dark:hover:border-[var(--primary)] focus-within:border-primary dark:focus-within:border-primary-dark', className), ...props, children: [children, jsxRuntime.jsx(Icon, { name: "chevron-down", size: 18, className: cn('transition-transform duration-200', open && 'rotate-180', disabled ? 'text-input-disabled dark:text-input-disabled-dark' : 'text-[var(--primary)]') })] }), jsxRuntime.jsx("div", { "data-select-position": JSON.stringify(position), style: { display: 'none' }, "aria-hidden": "true" })] }));
++                        : 'border-[var(--border-primary)] dark:border-border-dark hover:border-[var(--primary)] dark:hover:border-[var(--primary)] focus-within:border-primary dark:focus-within:border-primary-dark', className), ...props, children: [children, jsxRuntime.jsx(Icon, { name: "chevron-down", size: 18, className: cn('transition-transform duration-200', open && 'rotate-180', disabled ? 'text-input-disabled dark:text-input-disabled-dark' : 'text-[var(--primary)]') })] }));
+ });
+ SelectTrigger.displayName = 'SelectTrigger';
+ 
+@@ -17576,11 +17580,10 @@ SelectValue.displayName = 'SelectValue';
+  * @public
+  */
+ const SelectContent = React.forwardRef(({ children, className, container, glass, ...props }, ref) => {
+-    const { open, onOpenChange, glass: contextGlass } = useSelectContext();
++    const { open, onOpenChange, position, glass: contextGlass } = useSelectContext();
+     const resolvedGlass = useResolvedGlass(glass ?? contextGlass);
+     const contentRef = React.useRef(null);
+     const [portalContainer, setPortalContainer] = React.useState(null);
+-    const [position, setPosition] = React.useState({ top: 0, left: 0, width: 0 });
+     // Combine refs
+     React.useImperativeHandle(ref, () => contentRef.current);
+     // Create portal container
+@@ -17588,21 +17591,6 @@ const SelectContent = React.forwardRef(({ children, className, container, glass,
+         const containerElement = container || document.body;
+         setPortalContainer(containerElement);
+     }, [container]);
+-    // Get position from trigger
+-    React.useEffect(() => {
+-        if (open) {
+-            const positionData = document.querySelector('[data-select-position]');
+-            if (positionData) {
+-                try {
+-                    const pos = JSON.parse(positionData.getAttribute('data-select-position') || '{}');
+-                    setPosition(pos);
+-                }
+-                catch (e) {
+-                    // Fallback to default position
+-                }
+-            }
+-        }
+-    }, [open]);
+     // Close on outside click
+     React.useEffect(() => {
+         if (!open)

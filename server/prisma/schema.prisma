@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model OcrModule {
+  id                    String      @id @default(uuid())
+  code                  String      @unique
+  name                  String
+  standardPayloadSchema String        // JSON string
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model OcrConfig {
+  id              String   @id @default(uuid())
+  moduleCode      String
+  consignorCode   String?
+  transporterCode String?
+  prompt          String?
+  fieldMappings   String     // JSON string
+  isActive        Boolean  @default(true)
+  createdBy       String?
+  updatedBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Composite unique constraint to prevent duplicate hierarchical configs
+  // Note: Prisma treats nulls as distinct in unique constraints in some DBs, 
+  // but for config resolution logic we manually query. 
+  // We'll add an index for faster lookups.
+  @@index([moduleCode, consignorCode, transporterCode])
+}
+
+// --- POD Reconciliation Models ---
+
+model Shipment {
+  id            String   @id @default(uuid())
+  awbNumber     String   @unique
+  consigneeName String
+  lineItems     String   // JSON string: [{sku, description, sentQty}]
+  origin        String?
+  destination   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  podLineRecons PodLineRecon[]
+}
+
+model PodUpload {
+  id        String   @id @default(uuid())
+  fileName  String
+  filePath  String
+  source    String?  // e.g. "MANUAL", "EMAIL", "API"
+  status    String   @default("UPLOADED") // UPLOADED, PROCESSING, PROCESSED, REVIEW, APPROVED, REJECTED
+  awbNumber String?
+  batchId   String?
+  uploadedBy String?
+  epodItemStatus String?
+  reviewBucket String?
+  blockingReason String?
+  warningReason String?
+  isInSelectedScope Boolean @default(false)
+  submittedToConsignorAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ocrResult  PodOcrResult?
+  lineRecons PodLineRecon[]
+  exceptions PodException[]
+  approvals  PodApproval[]
+  batch      EpodBatchJob? @relation(fields: [batchId], references: [id])
+
+  @@index([awbNumber])
+  @@index([batchId])
+  @@index([status])
+  @@index([reviewBucket])
+  @@index([epodItemStatus])
+}
+
+model EpodBatchJob {
+  id               String   @id @default(uuid())
+  source           String?
+  createdBy        String?
+  selectedAwbsJson String   @default("[]")
+  status           String   @default("UPLOADED")
+  totalFiles       Int      @default(0)
+  processedFiles   Int      @default(0)
+  matchedCount     Int      @default(0)
+  unmatchedCount   Int      @default(0)
+  needsReviewCount Int      @default(0)
+  blockedCount     Int      @default(0)
+  readyCount       Int      @default(0)
+  submittedCount   Int      @default(0)
+  failedCount      Int      @default(0)
+  cancelledAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  uploads PodUpload[]
+
+  @@index([status])
+}
+
+model PodOcrResult {
+  id              String   @id @default(uuid())
+  podUploadId     String   @unique
+  rawOcrJson      String   // Full OCR JSON response
+  awbNumber       String?
+  consigneeName   String?
+  deliveryDate    String?
+  receiverName    String?
+  stampPresent    Boolean  @default(false)
+  signaturePresent Boolean @default(false)
+  remarks         String?
+  conditionNotes  String?
+  lineItems       String?  // JSON string: [{description, received_qty, condition}]
+  confidence      Float?
+  createdAt       DateTime @default(now())
+
+  podUpload PodUpload @relation(fields: [podUploadId], references: [id], onDelete: Cascade)
+}
+
+model PodLineRecon {
+  id           String   @id @default(uuid())
+  podUploadId  String
+  shipmentId   String?
+  sku          String?
+  description  String?
+  sentQty      Int      @default(0)
+  receivedQty  Int      @default(0)
+  damagedQty   Int      @default(0)
+  reconStatus  String   // MATCH, SHORT, EXCESS, DAMAGED
+  reviewAction String?  // ACCEPTED, OVERRIDDEN, REJECTED
+  reviewNote   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  podUpload PodUpload @relation(fields: [podUploadId], references: [id], onDelete: Cascade)
+  shipment  Shipment? @relation(fields: [shipmentId], references: [id])
+
+  @@index([podUploadId])
+  @@index([shipmentId])
+}
+
+model PodException {
+  id            String   @id @default(uuid())
+  podUploadId   String
+  exceptionType String   // SHORT_DELIVERY, DAMAGED_ITEMS, STAMP_MISSING, SIGNATURE_MISSING, UNMATCHED_POD, DUPLICATE_POD
+  severity      String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  description   String?
+  resolved      Boolean  @default(false)
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  podUpload PodUpload @relation(fields: [podUploadId], references: [id], onDelete: Cascade)
+
+  @@index([podUploadId])
+}
+
+model PodApproval {
+  id          String   @id @default(uuid())
+  podUploadId String
+  level       Int      @default(1) // 1 = reviewer, 2 = manager
+  action      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  actedBy     String?
+  comment     String?
+  actedAt     DateTime?
+  createdAt   DateTime @default(now())
+
+  podUpload PodUpload @relation(fields: [podUploadId], references: [id], onDelete: Cascade)
+
+  @@index([podUploadId])
+  @@index([action])
+}

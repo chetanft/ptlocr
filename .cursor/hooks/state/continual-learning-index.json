@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "transcripts": {
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/1c72c2fd-6322-43c8-ab67-72adc6f02707/1c72c2fd-6322-43c8-ab67-72adc6f02707.jsonl": {
+      "mtimeMs": 1773915593000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    },
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/24df67d5-f89b-4119-b48a-107b638d71be/24df67d5-f89b-4119-b48a-107b638d71be.jsonl": {
+      "mtimeMs": 1773916079000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    },
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/343a1e8d-47b9-451d-95f7-48665b5f8dff/343a1e8d-47b9-451d-95f7-48665b5f8dff.jsonl": {
+      "mtimeMs": 1773945000000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    },
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/5682e635-b3ec-4e35-a4ac-70e364ff4766/5682e635-b3ec-4e35-a4ac-70e364ff4766.jsonl": {
+      "mtimeMs": 1773927528000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    },
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/5f746fff-3d42-4593-9315-a27e77483be2/5f746fff-3d42-4593-9315-a27e77483be2.jsonl": {
+      "mtimeMs": 1773944823000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    },
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/db6a9d6d-3a18-41bd-a2d6-a52c12725ac3/db6a9d6d-3a18-41bd-a2d6-a52c12725ac3.jsonl": {
+      "mtimeMs": 1773912872000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    },
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/eefb992e-c29e-4fbd-a262-a2d08dd68942/eefb992e-c29e-4fbd-a262-a2d08dd68942.jsonl": {
+      "mtimeMs": 1773915864000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    },
+    "/Users/user/.cursor/projects/Users-user-Documents-ocrv2-service-main/agent-transcripts/f0075ee4-2ae2-4fc5-b79f-c2a5496d4f35/f0075ee4-2ae2-4fc5-b79f-c2a5496d4f35.jsonl": {
+      "mtimeMs": 1773915459000,
+      "lastProcessedAt": "2026-03-19T00:00:00.000Z"
+    }
+  }
+}
