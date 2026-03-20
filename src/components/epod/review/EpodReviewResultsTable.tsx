@@ -72,10 +72,7 @@ export function EpodReviewResultsTable({
 
   const renderAttachmentCell = (item: ProcessedItem, isPreviewable: boolean) => {
     const attachmentContent = (
-      <span
-        className="inline-flex max-w-full items-center gap-2 overflow-hidden text-brand-primary"
-        style={isPreviewable ? { cursor: 'pointer' } : undefined}
-      >
+      <span className="inline-flex max-w-full items-center gap-2 overflow-hidden text-brand-primary">
         <Icon name="image" size={16} />
         <span className="truncate" title={item.fileName}>
           {item.fileName}
@@ -88,18 +85,15 @@ export function EpodReviewResultsTable({
     }
 
     return (
-      <button
-        type="button"
-        className="inline-flex max-w-full items-center gap-2 overflow-hidden text-brand-primary"
+      <Button
+        variant="link"
+        size="sm"
         onClick={() => onPreview?.(item)}
         aria-label={`Preview ${item.fileName}`}
-        style={{ cursor: 'pointer' }}
+        style={{ padding: 0, height: 'auto', justifyContent: 'flex-start', minWidth: 0 }}
       >
-        <Icon name="image" size={16} />
-        <span className="truncate" title={item.fileName}>
-          {item.fileName}
-        </span>
-      </button>
+        {attachmentContent}
+      </Button>
     );
   };
 

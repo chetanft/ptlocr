@@ -30,7 +30,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         itemIds,
       }),
     );
-  } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Failed to create submission job' });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '';
+    if (/Workflow batch not found/i.test(message)) {
+      return res.status(404).json({ error: 'Workflow batch not found' });
+    }
+    return res.status(500).json({ error: message || 'Failed to create submission job' });
   }
 }

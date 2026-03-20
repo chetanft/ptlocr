@@ -525,7 +525,7 @@ export default function EpodUploadPage() {
         <div>
           {currentStep > 0 && !isActivelyProcessing ? (
             <Button
-              variant="ghost"
+              variant="text"
               onClick={() => {
                 setCurrentStep((previous) => Math.max(0, previous - 1));
                 setActiveProcessFilter('all');

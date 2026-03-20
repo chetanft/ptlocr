@@ -17,7 +17,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     return res.status(200).json(applyWorkflowAction(payload));
-  } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Failed to update workflow batch' });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '';
+    if (/Workflow batch not found/i.test(message)) {
+      return res.status(404).json({ error: 'Workflow batch not found' });
+    }
+    return res.status(500).json({ error: message || 'Failed to update workflow batch' });
   }
 }

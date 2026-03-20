@@ -20,11 +20,13 @@ import {
   Icon,
 } from "ft-design-system";
 import { configs, modules, consignors, transporters } from "@/lib/mockData";
+import { listStoredOcrConfigs } from "@/lib/ocrConfigStore";
 import { rem14 } from "@/lib/rem";
 
 export default function ConfigList() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const storedConfigs = listStoredOcrConfigs();
 
   const getModuleName = (moduleId: string) =>
     modules.find((m) => m.id === moduleId)?.name || moduleId;
@@ -39,7 +41,19 @@ export default function ConfigList() {
       ? transporters.find((t) => t.id === transporterId)?.name
       : "All";
 
-  const filteredConfigs = configs.filter((config) => {
+  const configRows = storedConfigs.length > 0
+    ? storedConfigs.map((config) => ({
+        id: config.id,
+        moduleId: config.moduleCode,
+        consignorId: config.consignorCode,
+        transporterId: config.transporterCode,
+        hasCustomPrompt: Boolean(config.prompt),
+        updatedAt: config.updatedAt,
+        updatedBy: config.updatedBy ?? "browser-local",
+      }))
+    : configs;
+
+  const filteredConfigs = configRows.filter((config) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     const moduleName = getModuleName(config.moduleId).toLowerCase();

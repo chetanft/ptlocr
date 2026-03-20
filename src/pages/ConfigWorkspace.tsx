@@ -9,6 +9,7 @@ import { MappingTable, FieldMapping } from "@/components/workspace/MappingTable"
 import { UnmappedFieldsPanel } from "@/components/workspace/UnmappedFieldsPanel";
 import { SaveConfigModal } from "@/components/workspace/SaveConfigModal";
 import { defaultPrompt, sampleOcrOutput, standardFields } from "@/lib/mockData";
+import { getStoredOcrConfig, saveStoredOcrConfig } from "@/lib/ocrConfigStore";
 import { autoSuggestMappings } from "@/lib/utils";
 import { rem14 } from "@/lib/rem";
 
@@ -54,15 +55,9 @@ export default function ConfigWorkspace() {
     setIsLoading(true);
 
     try {
-      // Build query string
-      const params = new URLSearchParams({ module: moduleId });
-      if (consignorId) params.append("consignor", consignorId);
-      if (transporterId) params.append("transporter", transporterId);
+      const loadedConfig = getStoredOcrConfig(moduleId, consignorId || null, transporterId || null);
 
-      const response = await fetch(`/api/ocr/config?${params.toString()}`);
-
-      if (response.status === 404) {
-        // No existing config found for this combination (or any parent), start fresh
+      if (!loadedConfig) {
         setPrompt(defaultPrompt);
         setIsDefaultPrompt(true);
         const defaultMappings: Record<string, FieldMapping> = {};
@@ -75,25 +70,10 @@ export default function ConfigWorkspace() {
         return;
       }
 
-      if (!response.ok) throw new Error("Failed to load config");
-
-      const loadedConfig = await response.json();
-
-      if (loadedConfig) {
-        setPrompt(loadedConfig.prompt || "");
-        setIsDefaultPrompt(!loadedConfig.prompt); // If prompt exists, it's custom
-
-        // Backend returns fieldMappings as string or JSON.
-        // If it's a string, the response.json() might have kept it as string if Prisma returned string.
-        // We need to ensure it's an object.
-        let mappings = loadedConfig.fieldMappings;
-        if (typeof mappings === "string") {
-          try { mappings = JSON.parse(mappings); } catch (e) { mappings = {}; }
-        }
-
-        setMappings(mappings || {});
-        message.success("Loaded existing configuration.");
-      }
+      setPrompt(loadedConfig.prompt || "");
+      setIsDefaultPrompt(!loadedConfig.prompt);
+      setMappings((loadedConfig.fieldMappings as Record<string, FieldMapping>) || {});
+      message.success("Loaded existing configuration.");
       setConfigLoaded(true);
     } catch (error) {
       console.error(error);
@@ -114,13 +94,6 @@ export default function ConfigWorkspace() {
     setOcrOutput(null);
 
     try {
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = (error) => reject(error);
-      });
-
       const formData = new FormData();
       formData.append('file', file);
       if (moduleId) formData.append('module', moduleId);
@@ -190,23 +163,15 @@ export default function ConfigWorkspace() {
 
   const handleSaveConfig = async () => {
     try {
-      const payload = {
+      saveStoredOcrConfig({
         moduleCode: moduleId,
         consignorCode: consignorId || null,
         transporterCode: transporterId || null,
         prompt: isDefaultPrompt ? null : prompt,
         fieldMappings: mappings,
-      };
-
-      const response = await fetch('/api/ocr/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        updatedBy: 'browser-local',
       });
-
-      if (!response.ok) throw new Error("Failed to save config");
-
-      message.success("Configuration has been saved successfully.");
+      message.success("Configuration has been saved in this browser.");
     } catch (error) {
       console.error(error);
       message.error("Failed to save configuration.");

@@ -341,7 +341,9 @@ export function EpodProcessDetailDrawer({
                     </div>
 
                     <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
-                      <Typography variant="title-secondary" color="primary">OCR extracted POD data</Typography>
+                      <Typography variant="title-secondary" color="primary" className="text-md">
+                        OCR extracted POD data
+                      </Typography>
                       <Input>
                         <InputLabel>Extracted AWB</InputLabel>
                         <InputField
@@ -404,7 +406,7 @@ export function EpodProcessDetailDrawer({
                         <Typography variant="body-primary-medium" color="primary">Delivery review outcome</Typography>
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
-                            variant={isClean ? 'primary' : 'text'}
+                            variant={isClean ? 'primary' : 'secondary'}
                             size="sm"
                             onClick={() => updateDraft({ deliveryReviewStatus: 'clean' })}
                             disabled={readOnly}
@@ -412,7 +414,7 @@ export function EpodProcessDetailDrawer({
                             Clean delivery
                           </Button>
                           <Button
-                            variant={isUnclean ? 'primary' : 'text'}
+                            variant={isUnclean ? 'primary' : 'secondary'}
                             size="sm"
                             onClick={() => updateDraft({ deliveryReviewStatus: 'unclean' })}
                             disabled={readOnly}

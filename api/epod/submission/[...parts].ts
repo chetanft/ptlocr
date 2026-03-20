@@ -51,7 +51,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
-  } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Submission job operation failed' });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '';
+    if (/Submission job not found/i.test(message)) {
+      return res.status(404).json({ error: 'Submission job not found' });
+    }
+    if (/Workflow batch not found/i.test(message)) {
+      return res.status(404).json({ error: 'Workflow batch not found' });
+    }
+    return res.status(500).json({ error: message || 'Submission job operation failed' });
   }
 }
