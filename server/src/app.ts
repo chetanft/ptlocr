@@ -69,7 +69,105 @@ app.get('/api/shipments', (req, res) => podController.listShipments(req, res));
 app.post('/api/shipments', (req, res) => podController.createShipment(req, res));
 app.post('/api/shipments/bulk', (req, res) => podController.bulkCreateShipments(req, res));
 
-// ePOD Batch APIs
+// ePOD Serverless-compatible one-shot process endpoint (for local dev)
+app.post('/api/epod/process', upload.array('files', 50), async (req, res) => {
+    try {
+        const files = (req.files as Express.Multer.File[]) || [];
+        if (files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+
+        const selectedAwbs: string[] = req.body.selectedAwbs ? JSON.parse(req.body.selectedAwbs) : [];
+        const apiKey = process.env.OPENAI_API_KEY;
+
+        // Import processing utilities
+        const fs = await import('fs');
+        const { ocrService } = await import('./services/ocrService');
+
+        // Load shipment master from frontend data
+        const shipmentPath = path.resolve(__dirname, '../../src/data/epodExtractedShipments.json');
+        let shipmentMaster: any[] = [];
+        try { shipmentMaster = JSON.parse(fs.readFileSync(shipmentPath, 'utf8')); } catch {}
+
+        const normalizeAwb = (awb: string) => awb.replace(/[\s\-_.]/g, '').toUpperCase();
+        const findShipment = (awb: string) => shipmentMaster.find(s => normalizeAwb(s.awbNumber) === normalizeAwb(awb));
+        const findByFileName = (name: string) => shipmentMaster.find(s => s.fileName === name);
+
+        const items: any[] = [];
+        for (const file of files) {
+            let ocrFields: any = {};
+            let confidence = 0.1;
+
+            if (apiKey && apiKey !== 'your-openai-api-key-here') {
+                try {
+                    const prompt = `Extract from this POD image as JSON: awb_number, consignee_name, consignor_name, from_city, to_city, stamp_present (bool), signature_present (bool), no_of_packages, weight_kg, remarks, condition_notes. Return valid JSON only.`;
+                    ocrFields = await ocrService.processDocumentWithOpenAI(file.path, prompt);
+                    confidence = 0.8;
+                } catch (e) { console.error('OCR failed for', file.originalname, e); }
+            }
+
+            // Fallback: extract AWB from filename
+            if (!ocrFields.awb_number) {
+                ocrFields.awb_number = file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g, '');
+            }
+
+            const matched = ocrFields.awb_number ? findShipment(ocrFields.awb_number) : null;
+            const matchedByFile = !matched ? findByFileName(file.originalname) : null;
+            const shipment = matched || matchedByFile;
+
+            let statusLabel = 'Unmapped';
+            let statusVariant = 'secondary';
+            let reason = 'No match found';
+
+            if (shipment) {
+                if (selectedAwbs.length > 0 && !selectedAwbs.map(normalizeAwb).includes(normalizeAwb(ocrFields.awb_number))) {
+                    statusLabel = 'Skipped'; statusVariant = 'danger'; reason = 'AWB not in selected scope';
+                } else if (!ocrFields.stamp_present || !ocrFields.signature_present) {
+                    statusLabel = 'Needs Review'; statusVariant = 'warning';
+                    const missing = [!ocrFields.stamp_present && 'stamp', !ocrFields.signature_present && 'signature'].filter(Boolean);
+                    reason = `Missing ${missing.join(' and ')}`;
+                } else {
+                    statusLabel = 'Matched'; statusVariant = 'success'; reason = 'All validations passed';
+                }
+            }
+
+            items.push({
+                id: `item-${items.length}`,
+                fileName: file.originalname,
+                awbNumber: ocrFields.awb_number || shipment?.awbNumber || null,
+                shipmentId: shipment?.shipmentId || null,
+                fromName: shipment?.origin || ocrFields.consignor_name || null,
+                fromSubtext: shipment?.originCity || ocrFields.from_city || null,
+                toName: shipment?.consigneeName || ocrFields.consignee_name || null,
+                toSubtext: shipment?.destination || ocrFields.to_city || null,
+                transporter: shipment?.transporter || null,
+                consigneeName: ocrFields.consignee_name || shipment?.consigneeName || null,
+                statusLabel, statusVariant, reason, confidence,
+                confidenceLabel: confidence >= 0.8 ? 'High' : confidence >= 0.5 ? 'Medium' : 'Low',
+                stampPresent: ocrFields.stamp_present ?? false,
+                signaturePresent: ocrFields.signature_present ?? false,
+                ocrFields,
+            });
+
+            // Cleanup uploaded file
+            try { fs.unlinkSync(file.path); } catch {}
+        }
+
+        const summary = {
+            totalAwbs: selectedAwbs.length || items.length,
+            totalUploadedImages: files.length,
+            matchedCount: items.filter((i: any) => i.statusLabel === 'Matched').length,
+            needsReviewCount: items.filter((i: any) => i.statusLabel === 'Needs Review').length,
+            skippedCount: items.filter((i: any) => i.statusLabel === 'Skipped').length,
+            unmappedCount: items.filter((i: any) => i.statusLabel === 'Unmapped').length,
+        };
+
+        res.json({ summary, items });
+    } catch (error: any) {
+        console.error('ePOD process error:', error);
+        res.status(500).json({ error: error.message || 'Processing failed' });
+    }
+});
+
+// ePOD Batch APIs (legacy — kept for backward compatibility)
 app.post('/api/epod/batch/create', (req, res) => epodBatchController.createBatch(req, res));
 app.post('/api/epod/batch/:batchId/upload', upload.array('files', 50), (req, res) => epodBatchController.uploadBatchFiles(req, res));
 app.post('/api/epod/batch/:batchId/process', (req, res) => epodBatchController.processBatch(req, res));
