@@ -45,7 +45,7 @@ export function EpodUploadDropzone({
         className="flex items-center justify-center rounded-md bg-white"
         style={{ width: rem14(48), height: rem14(48) }}
       >
-        <Icon name="upload" size="lg" className="text-primary-500" />
+        <Icon name="file-upload" size="lg" className="text-primary-500" />
       </div>
       <Typography variant="body-primary-semibold" color="primary">
         Click or Drag and drop file here to upload or{' '}

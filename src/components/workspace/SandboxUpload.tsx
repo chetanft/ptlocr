@@ -80,7 +80,7 @@ export function SandboxUpload({ onRunOcr, isRunning, hasResult }: SandboxUploadP
           </div>
         ) : (
           <label className="flex cursor-pointer flex-col items-center gap-2 p-4">
-            <Icon name="upload" className="h-8 w-8 text-primary-300" />
+            <Icon name="file-upload" className="h-8 w-8 text-primary-300" />
             <Typography className="text-sm text-primary-300">
               Drop PDF or image here, or click to browse
             </Typography>

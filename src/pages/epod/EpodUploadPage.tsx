@@ -1,29 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, Button } from 'ft-design-system';
 import { useAuth } from '@/auth/AuthContext';
 import { getEpodListPathForRole } from '@/auth/routeUtils';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbSeparator,
-  Button,
-  Typography,
-} from 'ft-design-system';
+import { EpodProcessingStageLoader } from '@/components/epod/flow/EpodProcessingStageLoader';
 import { EpodProgressStepper } from '@/components/epod/flow/EpodProgressStepper';
 import { EpodUploadDropzone } from '@/components/epod/flow/EpodUploadDropzone';
 import { EpodUploadedFileList } from '@/components/epod/flow/EpodUploadedFileList';
 import { EpodPageHeader } from '@/components/epod/layout/EpodPageHeader';
 import { EpodPageShell } from '@/components/epod/layout/EpodPageShell';
 import { EpodStickyFooter } from '@/components/epod/layout/EpodStickyFooter';
+import { EpodProcessDetailDrawer } from '@/components/epod/process/EpodProcessDetailDrawer';
 import { EpodReviewKpiGrid } from '@/components/epod/review/EpodReviewKpiGrid';
 import { EpodReviewResultsTable } from '@/components/epod/review/EpodReviewResultsTable';
 import { EpodAwbScopeGuard } from '@/components/epod/state/EpodAwbScopeGuard';
 import { EpodErrorState } from '@/components/epod/state/EpodErrorState';
-import { EpodLoadingState } from '@/components/epod/state/EpodLoadingState';
 import { useEpodProcess } from '@/hooks/epod/useEpodProcess';
-import type { EpodUploadFile, EpodUploadRouteState, EpodProcessingFilter } from '@/lib/epod/types';
+import { applyEpodWorkflowAction, createEpodWorkflow, type EpodProcessResult, type ProcessedItem, type ProcessedOcrPatch } from '@/lib/epodApi';
+import { processSelectedAwbFlow } from '@/lib/epod/selectedFlowProcessor';
+import type { EpodProcessingFilter, EpodUploadFile, EpodUploadRouteState } from '@/lib/epod/types';
 import { rem14 } from '@/lib/rem';
 
 const STEPS = ['Upload Images', 'Process Images', 'Review'] as const;
@@ -52,80 +47,258 @@ export default function EpodUploadPage() {
       : user?.role === 'Reviewer'
         ? 'REVIEWER_PORTAL'
         : 'TRANSPORTER_PORTAL';
-  const selectedAwbs = useMemo(
-    () => selectedShipments.map((s) => s.awbNumber),
-    [selectedShipments],
-  );
+  const selectedAwbs = useMemo(() => selectedShipments.map((shipment) => shipment.awbNumber), [selectedShipments]);
 
-  // ---- State ----
   const [currentStep, setCurrentStep] = useState(0);
   const [files, setFiles] = useState<EpodUploadFile[]>([]);
   const [activeProcessFilter, setActiveProcessFilter] = useState<EpodProcessingFilter>('all');
+  const [workingItems, setWorkingItems] = useState<ProcessedItem[]>([]);
+  const [selectedProcessItemId, setSelectedProcessItemId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [workflowBatchId, setWorkflowBatchId] = useState<string | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [processResult, setProcessResult] = useState<EpodProcessResult | null>(null);
+  const [selectionProcessing, setSelectionProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState(0);
 
-  // ---- Serverless processing hook ----
-  const { processAsync, result, isProcessing, error: processError, reset: resetProcess, progress } = useEpodProcess();
+  const { processAsync, result, isProcessing, error: processError, progress, reset: resetProcess } = useEpodProcess();
+  const isActivelyProcessing = isProcessing || selectionProcessing;
 
-  // ---- Derived data from result ----
-  const items = result?.items ?? [];
-  const summary = result?.summary ?? null;
+  useEffect(() => {
+    if (result) {
+      setProcessResult(result);
+      setWorkingItems(result.items);
+    }
+  }, [result]);
 
-  const processCounts = useMemo(() => ({
-    matched: items.filter((i) => i.statusLabel === 'Matched').length,
-    needsReview: items.filter((i) => i.statusLabel === 'Needs Review').length,
-    skipped: items.filter((i) => i.statusLabel === 'Skipped').length,
-    unmapped: items.filter((i) => i.statusLabel === 'Unmapped').length,
-  }), [items]);
+  useEffect(() => {
+    if (!isActivelyProcessing) {
+      setProcessingStage(0);
+      return;
+    }
+
+    let tick = 0;
+    const interval = window.setInterval(() => {
+      tick += 1;
+      setProcessingStage((previous) => {
+        let nextStage: number;
+
+        if (uploadMode === 'selection') {
+          // Selection mode: simulate stages with timer
+          nextStage = Math.min(3, Math.floor(tick / 1.1));
+        } else {
+          // Bulk mode: use actual stage from backend progress
+          nextStage = progress.stage ?? 0;
+        }
+
+        // Never go backwards — once a step is reached, keep it
+        return Math.max(previous, nextStage);
+      });
+    }, 700);
+
+    return () => window.clearInterval(interval);
+  }, [isActivelyProcessing, progress.completed, progress.total, uploadMode]);
+
+  const processCounts = useMemo(
+    () => ({
+      matched: workingItems.filter((item) => item.statusLabel === 'Matched').length,
+      needsReview: workingItems.filter((item) => item.statusLabel === 'Needs Review').length,
+      skipped: workingItems.filter((item) => item.statusLabel === 'Skipped').length,
+      unmapped: workingItems.filter((item) => item.statusLabel === 'Unmapped').length,
+    }),
+    [workingItems],
+  );
 
   const filteredItems = useMemo(() => {
     switch (activeProcessFilter) {
-      case 'matched': return items.filter((i) => i.statusLabel === 'Matched');
-      case 'needsReview': return items.filter((i) => i.statusLabel === 'Needs Review');
-      case 'skipped': return items.filter((i) => i.statusLabel === 'Skipped');
-      case 'unmapped': return items.filter((i) => i.statusLabel === 'Unmapped');
-      default: return items;
+      case 'matched':
+        return workingItems.filter((item) => item.statusLabel === 'Matched');
+      case 'needsReview':
+        return workingItems.filter((item) => item.statusLabel === 'Needs Review');
+      case 'skipped':
+        return workingItems.filter((item) => item.statusLabel === 'Skipped');
+      case 'unmapped':
+        return workingItems.filter((item) => item.statusLabel === 'Unmapped');
+      default:
+        return workingItems;
     }
-  }, [activeProcessFilter, items]);
+  }, [activeProcessFilter, workingItems]);
 
-  const totalAwbCount = uploadMode === 'selection' ? selectedShipments.length : (summary?.totalUploadedImages ?? 0);
+  const totalAwbCount = uploadMode === 'selection' ? selectedShipments.length : (processResult?.summary.totalAwbs ?? 0);
+  const selectedProcessItem = useMemo(
+    () => workingItems.find((item) => item.id === selectedProcessItemId) ?? null,
+    [selectedProcessItemId, workingItems],
+  );
 
-  // ---- Handlers ----
   const handleFilesSelected = (selectedFiles: FileList) => {
     const nextFiles = Array.from(selectedFiles).map(createUploadFile);
-    setFiles((prev) => [...prev, ...nextFiles]);
+    setFiles((previous) => [...previous, ...nextFiles]);
   };
 
   const handleRemoveFile = (id: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+    setFiles((previous) => previous.filter((file) => file.id !== id));
   };
 
   const handleUploadAndProcess = async () => {
     try {
       setCurrentStep(1);
-      await processAsync({
-        files: files.map((f) => f.file),
-        selectedAwbs,
-        source,
-        actor,
-      });
-      // Auto-advance to review when done
-      setCurrentStep(2);
+      setActiveProcessFilter('all');
+      setWorkflowError(null);
+      resetProcess();
+      setProcessResult(null);
+      setWorkingItems([]);
+      setWorkflowBatchId(null);
+
+      const nextProcessResult =
+        uploadMode === 'selection'
+          ? await (async () => {
+              setSelectionProcessing(true);
+              try {
+                return await processSelectedAwbFlow({
+                  files: files.map((file) => file.file),
+                  selectedShipments,
+                  actor,
+                  delayMs: 3000,
+                });
+              } finally {
+                setSelectionProcessing(false);
+              }
+            })()
+          : await processAsync({
+              files: files.map((file) => file.file),
+              selectedAwbs,
+              source,
+              actor,
+            });
+
+      setProcessResult(nextProcessResult);
+      const workflow = await createEpodWorkflow(nextProcessResult);
+      setWorkflowBatchId(workflow.batchId);
+      setWorkingItems(workflow.items);
     } catch {
-      // Error is captured by the hook, stay on step 1
+      // Hook already captures and surfaces the error message.
+      setSelectionProcessing(false);
     }
   };
 
   const handleSubmit = () => {
-    // For POC: just navigate back — no server-side submit needed
     navigate(epodListPath);
   };
 
-  // ---- Footer ----
+  const handleOpenView = (item: ProcessedItem) => {
+    setSelectedProcessItemId(item.id);
+    setDrawerOpen(true);
+  };
+
+  const syncWorkflow = async (payload: Parameters<typeof applyEpodWorkflowAction>[0]) => {
+    const workflow = await applyEpodWorkflowAction(payload);
+    setWorkingItems(workflow.items);
+    setWorkflowBatchId(workflow.batchId);
+  };
+
+  const handleDocumentAction = async (action: 'reject' | 'sendToReviewer' | 'approve') => {
+    if (!workflowBatchId || !selectedProcessItemId) {
+      return;
+    }
+    try {
+      setWorkflowError(null);
+      await syncWorkflow({
+        batchId: workflowBatchId,
+        itemId: selectedProcessItemId,
+        actor,
+        actionType: 'document',
+        documentAction: action,
+      });
+    } catch (error: any) {
+      setWorkflowError(error?.message || 'Failed to update workflow');
+    }
+  };
+
+  const handleSaveOcrEdits = async (ocrPatch: ProcessedOcrPatch) => {
+    if (!workflowBatchId || !selectedProcessItemId) {
+      return;
+    }
+    try {
+      setWorkflowError(null);
+      await syncWorkflow({
+        batchId: workflowBatchId,
+        itemId: selectedProcessItemId,
+        actor,
+        actionType: 'ocr-update',
+        ocrPatch,
+      });
+    } catch (error: any) {
+      setWorkflowError(error?.message || 'Failed to save OCR edits');
+    }
+  };
+
+  const handleLineReview = async (lineId: string, reviewAction: 'ACCEPTED' | 'REJECTED') => {
+    if (!workflowBatchId || !selectedProcessItemId) {
+      return;
+    }
+    try {
+      setWorkflowError(null);
+      await syncWorkflow({
+        batchId: workflowBatchId,
+        itemId: selectedProcessItemId,
+        actor,
+        actionType: 'line-review',
+        lineId,
+        reviewAction,
+      });
+    } catch (error: any) {
+      setWorkflowError(error?.message || 'Failed to update workflow');
+    }
+  };
+
+  const handleLineOverride = async (lineId: string) => {
+    if (!workflowBatchId || !selectedProcessItemId) {
+      return;
+    }
+    try {
+      setWorkflowError(null);
+      await syncWorkflow({
+        batchId: workflowBatchId,
+        itemId: selectedProcessItemId,
+        actor,
+        actionType: 'line-override',
+        lineId,
+      });
+    } catch (error: any) {
+      setWorkflowError(error?.message || 'Failed to update workflow');
+    }
+  };
+
+  const handleResolveException = async (exceptionId: string) => {
+    if (!workflowBatchId || !selectedProcessItemId) {
+      return;
+    }
+    try {
+      setWorkflowError(null);
+      await syncWorkflow({
+        batchId: workflowBatchId,
+        itemId: selectedProcessItemId,
+        actor,
+        actionType: 'exception-resolve',
+        exceptionId,
+      });
+    } catch (error: any) {
+      setWorkflowError(error?.message || 'Failed to update workflow');
+    }
+  };
+
   const footer = (
     <EpodStickyFooter>
       <div className="flex items-center justify-between gap-4">
         <div>
-          {currentStep > 0 && !isProcessing ? (
-            <Button variant="ghost" onClick={() => { setCurrentStep((p) => Math.max(0, p - 1)); setActiveProcessFilter('all'); }}>
+          {currentStep > 0 && !isActivelyProcessing ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setCurrentStep((previous) => Math.max(0, previous - 1));
+                setActiveProcessFilter('all');
+              }}
+            >
               Previous
             </Button>
           ) : null}
@@ -135,11 +308,16 @@ export default function EpodUploadPage() {
             Cancel
           </Button>
           {currentStep === 0 ? (
-            <Button variant="primary" onClick={handleUploadAndProcess} disabled={files.length === 0} loading={isProcessing}>
+            <Button variant="primary" onClick={handleUploadAndProcess} disabled={files.length === 0} loading={isActivelyProcessing}>
               Upload and process
             </Button>
           ) : null}
-          {currentStep === 2 ? (
+          {currentStep === 1 && processResult ? (
+            <Button variant="primary" onClick={() => setCurrentStep(2)}>
+              Next
+            </Button>
+          ) : null}
+          {currentStep === 2 && processResult ? (
             <Button variant="primary" onClick={handleSubmit} disabled={processCounts.matched === 0}>
               Submit to consignor
             </Button>
@@ -149,14 +327,29 @@ export default function EpodUploadPage() {
     </EpodStickyFooter>
   );
 
-  // ---- Render ----
+  const resultSurface = processResult ? (
+    <>
+      <EpodReviewKpiGrid
+        totalAwbs={totalAwbCount}
+        totalUploadedImages={processResult.summary.totalUploadedImages}
+        matchedCount={processCounts.matched}
+        needReviewCount={processCounts.needsReview}
+        skippedCount={processCounts.skipped}
+        unmappedCount={processCounts.unmapped}
+        activeFilter={activeProcessFilter}
+        onFilterChange={setActiveProcessFilter}
+      />
+      <EpodReviewResultsTable items={filteredItems} onView={handleOpenView} />
+    </>
+  ) : null;
+
   const content = (
     <div className="flex flex-col" style={{ gap: rem14(40) }}>
       <EpodProgressStepper steps={STEPS} currentStep={currentStep} />
 
       {processError ? <EpodErrorState message={processError} /> : null}
+      {workflowError ? <EpodErrorState message={workflowError} /> : null}
 
-      {/* Step 0: Upload */}
       {currentStep === 0 ? (
         <div className="flex flex-col gap-4">
           <EpodUploadDropzone onFileSelect={handleFilesSelected} />
@@ -164,45 +357,32 @@ export default function EpodUploadPage() {
         </div>
       ) : null}
 
-      {/* Step 1: Processing */}
       {currentStep === 1 ? (
         <div className="flex flex-col gap-4">
-          {isProcessing ? (
-            <EpodLoadingState label={`Processing file ${progress.completed + 1} of ${progress.total || files.length}...`} />
-          ) : result ? (
-            <>
-              <EpodReviewKpiGrid
-                totalAwbs={totalAwbCount}
-                totalUploadedImages={summary?.totalUploadedImages ?? 0}
-                matchedCount={processCounts.matched}
-                needReviewCount={processCounts.needsReview}
-                skippedCount={processCounts.skipped}
-                unmappedCount={processCounts.unmapped}
-                activeFilter={activeProcessFilter}
-                onFilterChange={setActiveProcessFilter}
-              />
-              <EpodReviewResultsTable items={filteredItems} />
-            </>
-          ) : null}
+          {isActivelyProcessing ? (
+            <EpodProcessingStageLoader
+              activeStage={processingStage}
+              completedFiles={progress.completed}
+              totalFiles={progress.total || files.length}
+              mode={uploadMode}
+            />
+          ) : resultSurface}
         </div>
       ) : null}
 
-      {/* Step 2: Review */}
-      {currentStep === 2 ? (
-        <div className="flex flex-col gap-4">
-          <EpodReviewKpiGrid
-            totalAwbs={totalAwbCount}
-            totalUploadedImages={summary?.totalUploadedImages ?? 0}
-            matchedCount={processCounts.matched}
-            needReviewCount={processCounts.needsReview}
-            skippedCount={processCounts.skipped}
-            unmappedCount={processCounts.unmapped}
-            activeFilter={activeProcessFilter}
-            onFilterChange={setActiveProcessFilter}
-          />
-          <EpodReviewResultsTable items={filteredItems} />
-        </div>
-      ) : null}
+      {currentStep === 2 ? <div className="flex flex-col gap-4">{resultSurface}</div> : null}
+
+      <EpodProcessDetailDrawer
+        item={selectedProcessItem}
+        open={drawerOpen}
+        role={user?.role ?? 'Transporter'}
+        onOpenChange={setDrawerOpen}
+        onDocumentAction={handleDocumentAction}
+        onSaveOcrEdits={handleSaveOcrEdits}
+        onLineReview={handleLineReview}
+        onLineOverride={handleLineOverride}
+        onResolveException={handleResolveException}
+      />
     </div>
   );
 
@@ -221,16 +401,14 @@ export default function EpodUploadPage() {
           </BreadcrumbList>
         </Breadcrumb>
       )}
-      header={(
-        <EpodPageHeader title="Upload ePOD images" onBack={() => navigate(-1)} />
-      )}
+      header={<EpodPageHeader title="Upload ePOD images" onBack={() => navigate(-1)} />}
       footer={footer}
     >
       {uploadMode === 'selection' ? (
-        <EpodAwbScopeGuard shipments={selectedShipments}>
-          {content}
-        </EpodAwbScopeGuard>
-      ) : content}
+        <EpodAwbScopeGuard shipments={selectedShipments}>{content}</EpodAwbScopeGuard>
+      ) : (
+        content
+      )}
     </EpodPageShell>
   );
 }

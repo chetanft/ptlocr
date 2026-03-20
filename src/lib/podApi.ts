@@ -1,9 +1,3 @@
-import type {
-    EpodBatchItem,
-    EpodBatchJob,
-    EpodSubmissionSummary,
-} from '@/lib/epod/types';
-
 const API_BASE = '/api';
 
 async function fetchJson(url: string, options?: RequestInit) {
@@ -145,52 +139,4 @@ export async function bulkCreateShipments(shipments: any[]) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shipments }),
     });
-}
-
-// ePOD batch
-export async function createEpodBatch(data: { selectedAwbs: string[]; source?: string; createdBy?: string }) {
-    return fetchJson(`${API_BASE}/epod/batch/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    }) as Promise<EpodBatchJob>;
-}
-
-export async function uploadEpodBatchFiles(batchId: string, files: File[], metadata?: { source?: string; uploadedBy?: string }) {
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
-    if (metadata?.source) formData.append('source', metadata.source);
-    if (metadata?.uploadedBy) formData.append('uploadedBy', metadata.uploadedBy);
-    return fetchJson(`${API_BASE}/epod/batch/${batchId}/upload`, {
-        method: 'POST',
-        body: formData,
-    }) as Promise<{ batch: EpodBatchJob; uploads: Array<{ id: string; fileName: string }> }>;
-}
-
-export async function processEpodBatch(batchId: string) {
-    return fetchJson(`${API_BASE}/epod/batch/${batchId}/process`, {
-        method: 'POST',
-    }) as Promise<EpodBatchJob>;
-}
-
-export async function getEpodBatch(batchId: string) {
-    return fetchJson(`${API_BASE}/epod/batch/${batchId}`) as Promise<EpodBatchJob>;
-}
-
-export async function getEpodBatchItems(batchId: string) {
-    return fetchJson(`${API_BASE}/epod/batch/${batchId}/items`) as Promise<{ items: EpodBatchItem[] }>;
-}
-
-export async function submitEpodBatch(batchId: string, actedBy?: string) {
-    return fetchJson(`${API_BASE}/epod/batch/${batchId}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actedBy }),
-    }) as Promise<EpodSubmissionSummary & { batch: EpodBatchJob }>;
-}
-
-export async function cancelEpodBatch(batchId: string) {
-    return fetchJson(`${API_BASE}/epod/batch/${batchId}/cancel`, {
-        method: 'POST',
-    }) as Promise<EpodBatchJob>;
 }

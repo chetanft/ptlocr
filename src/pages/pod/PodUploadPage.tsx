@@ -205,7 +205,7 @@ export default function PodUploadPage() {
                 <Button
                     variant="primary"
                     size="lg"
-                    icon="upload"
+                    icon="file-upload"
                     loading={isWorking}
                     disabled={isWorking}
                     onClick={handleUploadAndProcess}
@@ -244,7 +244,7 @@ function DropZone({ label, onDrop, onFileSelect, multiple }: DropZoneProps) {
                     className="flex flex-col items-center border border-dashed border-border-primary rounded-md text-center cursor-pointer bg-bg-secondary"
                     style={{ gap: rem14(16), padding: rem14(24) }}
                 >
-                    <Icon name="upload" size="xl" className="text-primary-500" />
+                    <Icon name="file-upload" size="xl" className="text-primary-500" />
                     <Typography variant="body-primary" color="primary">
                         {label}
                     </Typography>

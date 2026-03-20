@@ -1,66 +1,130 @@
-import { Typography } from 'ft-design-system';
-import { EPOD_PROCESSING_STEPS } from '@/lib/epod/status';
-import type { EpodBatchJob } from '@/lib/epod/types';
-import { rem14 } from '@/lib/rem';
+import { Icon, Typography } from 'ft-design-system';
+import { rem } from '@/lib/rem';
 
-function getActiveIndex(batch?: EpodBatchJob | null) {
-  if (!batch || batch.totalFiles === 0) return 0;
-  if (batch.status === 'REVIEW_REQUIRED' || batch.status === 'READY_TO_SUBMIT' || batch.status === 'SUBMITTED') {
-    return 3;
-  }
+const STEPS = [
+  'Running OCR extraction',
+  'Matching with load data',
+  'Validating information',
+  'Finalising results',
+];
 
-  const processedRatio = Math.min(batch.processedFiles / batch.totalFiles, 1);
+interface EpodProcessingTimelineProps {
+  activeStep?: number;
+  batch?: { status?: string; totalFiles?: number; processedFiles?: number } | null;
+}
 
-  if (processedRatio >= 0.75) return 3;
-  if (processedRatio >= 0.5) return 2;
-  if (processedRatio >= 0.25) return 1;
+function deriveStep(batch?: EpodProcessingTimelineProps['batch']): number {
+  if (!batch || !batch.totalFiles) return 0;
+  if (batch.status === 'REVIEW_REQUIRED' || batch.status === 'READY_TO_SUBMIT' || batch.status === 'SUBMITTED') return 3;
+  const ratio = Math.min((batch.processedFiles ?? 0) / batch.totalFiles, 1);
+  if (ratio >= 0.75) return 3;
+  if (ratio >= 0.5) return 2;
+  if (ratio >= 0.25) return 1;
   return 0;
 }
 
-export function EpodProcessingTimeline({ batch }: { batch?: EpodBatchJob | null }) {
-  const activeIndex = getActiveIndex(batch);
-  const isProcessing =
-    !!batch &&
-    (batch.status === 'OCR_PROCESSING' || batch.status === 'MATCHING') &&
-    batch.processedFiles < batch.totalFiles;
+/** CSS spinner keyframes injected once */
+const spinnerStyle = `
+@keyframes epod-spinner {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+`;
+
+export function EpodProcessingTimeline({ activeStep, batch }: EpodProcessingTimelineProps) {
+  const currentStep = activeStep ?? deriveStep(batch);
 
   return (
-    <div className="flex flex-col items-center" style={{ paddingTop: rem14(24), paddingBottom: rem14(24) }}>
-      <div className="flex flex-col" style={{ gap: 0 }}>
-        {EPOD_PROCESSING_STEPS.map((step, index) => {
-          const isActive = index <= activeIndex;
-          const isLast = index === EPOD_PROCESSING_STEPS.length - 1;
-          const isCurrent = isProcessing && index === activeIndex;
+    <>
+      <style>{spinnerStyle}</style>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: `${rem(32)} 0` }}>
+        <div style={{ display: 'flex', flexDirection: 'column', width: rem(280) }}>
+          {STEPS.map((label, index) => {
+            const isCompleted = index < currentStep;
+            const isActive = index === currentStep;
+            const isFuture = index > currentStep;
+            const isLast = index === STEPS.length - 1;
 
-          return (
-            <div key={step} className="flex flex-col items-start">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex items-center justify-center rounded-full shrink-0 ${isCurrent ? 'animate-pulse' : ''}`}
-                  style={{
-                    width: 24,
-                    height: 24,
-                    backgroundColor: isActive ? 'var(--primary-700)' : 'var(--border-primary)',
-                    color: '#FFFFFF',
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}
-                >
-                  {index + 1}
+            return (
+              <div key={label}>
+                {/* Step row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: rem(16) }}>
+                  {/* Circle */}
+                  <div style={{ width: 32, height: 32, position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {isCompleted ? (
+                      /* Completed: dark circle with checkmark */
+                      <div style={{
+                        width: 24, height: 24, borderRadius: '50%',
+                        backgroundColor: 'var(--primary)', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Icon name="check" size={10} style={{ color: '#fff' }} />
+                      </div>
+                    ) : isActive ? (
+                      /* Active: dark circle with spinning arc */
+                      <>
+                        <div style={{
+                          width: 24, height: 24, borderRadius: '50%',
+                          backgroundColor: 'var(--primary)', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center',
+                          position: 'relative', zIndex: 1,
+                        }}>
+                          <Icon name="check" size={10} style={{ color: '#fff' }} />
+                        </div>
+                        {/* Spinner arc */}
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          width: 32, height: 32,
+                          borderRadius: '50%',
+                          border: '2.5px solid transparent',
+                          borderTopColor: 'var(--primary)',
+                          borderRightColor: 'var(--primary)',
+                          animation: 'epod-spinner 1.2s linear infinite',
+                        }} />
+                      </>
+                    ) : (
+                      /* Future: gray circle with number */
+                      <div style={{
+                        width: 24, height: 24, borderRadius: '50%',
+                        backgroundColor: 'var(--border-primary)', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <span style={{ color: 'var(--primary)', fontSize: 10, fontWeight: 500 }}>
+                          {index + 1}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Label */}
+                  <Typography
+                    variant="body-primary-regular"
+                    style={{ color: isFuture ? 'var(--border-primary)' : 'var(--primary)' }}
+                  >
+                    {label}
+                  </Typography>
                 </div>
-                <Typography variant="body-primary-regular" style={{ color: isActive ? 'var(--primary)' : 'var(--border-primary)' }}>
-                  {step}
-                </Typography>
+
+                {/* Vertical connector */}
+                {!isLast ? (
+                  <div style={{ width: 32, display: 'flex', justifyContent: 'center', height: rem(24) }}>
+                    {isCompleted ? (
+                      /* Solid line for completed */
+                      <div style={{ width: 2, height: '100%', backgroundColor: 'var(--primary)' }} />
+                    ) : (
+                      /* Dashed line for pending */
+                      <div style={{
+                        width: 0, height: '100%',
+                        borderLeft: '2px dashed var(--border-primary)',
+                      }} />
+                    )}
+                  </div>
+                ) : null}
               </div>
-              {!isLast ? (
-                <div style={{ width: 24, display: 'flex', justifyContent: 'center', height: 32 }}>
-                  <div style={{ width: 0, height: '100%', borderLeft: `2px dashed ${index < activeIndex ? 'var(--primary-700)' : 'var(--border-primary)'}` }} />
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

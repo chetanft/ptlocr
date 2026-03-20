@@ -1,8 +1,10 @@
 import { extractFieldsFromFile, type EpodOcrResult } from './openaiOcr.js';
-import { findShipmentByAwb, findShipmentByFileName, normalizeAwb, type ShipmentRecord } from './shipmentMaster.js';
+import { findShipmentByAwb, normalizeAwb, type ShipmentRecord } from './shipmentMaster.js';
 
 export interface ProcessedItem {
   id: string;
+  processingMode?: 'bulk' | 'selection';
+  bucket?: 'matched' | 'needs_review' | 'unmapped' | 'skipped';
   fileName: string;
   awbNumber: string | null;
   shipmentId: string | null;
@@ -19,6 +21,62 @@ export interface ProcessedItem {
   confidenceLabel: string;
   stampPresent: boolean;
   signaturePresent: boolean;
+  invoiceNumberExtracted?: string | null;
+  invoiceNumberSystem?: string | null;
+  sentQty?: number | null;
+  receivedQty?: number | null;
+  difference?: number | null;
+  deliveryReviewStatus?: 'clean' | 'unclean' | null;
+  systemData: {
+    awbNumber: string | null;
+    shipmentId: string | null;
+    fromName: string | null;
+    fromSubtext: string | null;
+    toName: string | null;
+    toSubtext: string | null;
+    transporter: string | null;
+    deliveredDate: string | null;
+    packages: number | null;
+  };
+  ocrData: {
+    extractedAwb: string | null;
+    extractedConsignee: string | null;
+    extractedDeliveryDate: string | null;
+    extractedFrom: string | null;
+    extractedTo: string | null;
+    stampPresent: boolean;
+    signaturePresent: boolean;
+    remarks: string | null;
+    conditionNotes: string | null;
+    description: string | null;
+    packages: number | null;
+    rawFields: EpodOcrResult;
+  };
+  lineItems: Array<{
+    id: string;
+    sku: string | null;
+    description: string;
+    sentQty: number;
+    receivedQty: number;
+    damagedQty: number;
+    difference: number;
+    reconStatus: 'MATCH' | 'SHORT' | 'EXCESS' | 'DAMAGED';
+    reviewAction?: 'ACCEPTED' | 'REJECTED' | 'OVERRIDDEN';
+    note?: string | null;
+  }>;
+  exceptions: Array<{
+    id: string;
+    type: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    description: string;
+    resolved: boolean;
+  }>;
+  auditTrail: Array<{
+    id: string;
+    timestamp: string;
+    actor: string;
+    description: string;
+  }>;
   ocrFields: EpodOcrResult;
 }
 
@@ -39,7 +97,7 @@ function classifyItem(
   confidence: number,
   matchedShipment: ShipmentRecord | null,
   selectedAwbs: string[] | null,
-  fileName: string,
+  _fileName: string,
 ): { statusLabel: ProcessedItem['statusLabel']; statusVariant: ProcessedItem['statusVariant']; reason: string } {
   const extractedAwb = extracted.awb_number;
 
@@ -53,6 +111,14 @@ function classifyItem(
     return { statusLabel: 'Unmapped', statusVariant: 'secondary', reason: `AWB ${extractedAwb} not found in shipment master` };
   }
 
+  const missingSystemFields = [
+    !matchedShipment.shipmentId && 'shipment id',
+    !matchedShipment.origin && 'from',
+    !matchedShipment.consigneeName && 'to name',
+    !matchedShipment.destination && 'to city',
+    !matchedShipment.transporter && 'transporter',
+  ].filter(Boolean) as string[];
+
   // AWB not in selected scope (if selection mode)
   if (selectedAwbs && selectedAwbs.length > 0) {
     const normalizedSelected = selectedAwbs.map(normalizeAwb);
@@ -64,6 +130,18 @@ function classifyItem(
   // Low confidence OCR
   if (confidence < 0.4) {
     return { statusLabel: 'Needs Review', statusVariant: 'warning', reason: 'Low OCR confidence — manual verification needed' };
+  }
+
+  if (missingSystemFields.length > 0) {
+    return {
+      statusLabel: 'Needs Review',
+      statusVariant: 'warning',
+      reason: `Incomplete shipment data: missing ${missingSystemFields.join(', ')}`,
+    };
+  }
+
+  if (extracted.invoice_number && matchedShipment.shipmentId && !extracted.invoice_number.includes(extractedAwb)) {
+    return { statusLabel: 'Needs Review', statusVariant: 'warning', reason: 'Invoice details need manual verification' };
   }
 
   // Missing stamp or signature
@@ -87,10 +165,153 @@ function classifyItem(
   return { statusLabel: 'Matched', statusVariant: 'success', reason: 'AWB matched, all validations passed' };
 }
 
+function mapBucket(statusLabel: ProcessedItem['statusLabel']): NonNullable<ProcessedItem['bucket']> {
+  switch (statusLabel) {
+    case 'Matched':
+      return 'matched';
+    case 'Needs Review':
+      return 'needs_review';
+    case 'Skipped':
+      return 'skipped';
+    default:
+      return 'unmapped';
+  }
+}
+
 function getConfidenceLabel(confidence: number): string {
   if (confidence >= 0.8) return 'High';
   if (confidence >= 0.5) return 'Medium';
   return 'Low';
+}
+
+function countMatchedAwbs(items: ProcessedItem[]): number {
+  return new Set(
+    items
+      .filter((item) => item.statusLabel !== 'Unmapped' && Boolean(item.awbNumber))
+      .map((item) => normalizeAwb(item.awbNumber as string)),
+  ).size;
+}
+
+function buildLineItems(
+  matchedShipment: ShipmentRecord | null,
+  extracted: EpodOcrResult,
+  fileName: string,
+) {
+  const sentQty = matchedShipment?.packageCount ?? extracted.no_of_packages ?? 0;
+  const receivedQty = extracted.no_of_packages ?? sentQty;
+  const remarks = `${extracted.remarks || ''} ${extracted.condition_notes || ''}`.toLowerCase();
+  const damagedQty = /damage|broken|torn|wet|crushed/.test(remarks) ? 1 : 0;
+  const difference = receivedQty - sentQty;
+  let reconStatus: 'MATCH' | 'SHORT' | 'EXCESS' | 'DAMAGED' = 'MATCH';
+
+  if (damagedQty > 0) {
+    reconStatus = 'DAMAGED';
+  } else if (difference < 0) {
+    reconStatus = 'SHORT';
+  } else if (difference > 0) {
+    reconStatus = 'EXCESS';
+  }
+
+  return [{
+    id: `${fileName}-line-1`,
+    sku: extracted.invoice_number ?? matchedShipment?.shipmentId ?? null,
+    description: extracted.description || 'POD package line',
+    sentQty,
+    receivedQty,
+    damagedQty,
+    difference,
+    reconStatus,
+  }];
+}
+
+function buildExceptions(
+  classification: { statusLabel: ProcessedItem['statusLabel']; reason: string },
+  extracted: EpodOcrResult,
+  lineItems: ReturnType<typeof buildLineItems>,
+) {
+  const exceptions: ProcessedItem['exceptions'] = [];
+  const remarks = `${extracted.remarks || ''} ${extracted.condition_notes || ''}`.toLowerCase();
+
+  if (classification.statusLabel === 'Unmapped') {
+    exceptions.push({
+      id: 'ex-unmapped',
+      type: 'UNMATCHED_POD',
+      severity: 'HIGH',
+      description: classification.reason,
+      resolved: false,
+    });
+  }
+  if (classification.statusLabel === 'Skipped') {
+    exceptions.push({
+      id: 'ex-skipped',
+      type: 'MISMATCH_ERROR',
+      severity: 'HIGH',
+      description: classification.reason,
+      resolved: false,
+    });
+  }
+  if (!extracted.stamp_present) {
+    exceptions.push({
+      id: 'ex-stamp',
+      type: 'STAMP_MISSING',
+      severity: 'MEDIUM',
+      description: 'Consignee stamp not detected',
+      resolved: false,
+    });
+  }
+  if (!extracted.signature_present) {
+    exceptions.push({
+      id: 'ex-signature',
+      type: 'SIGNATURE_MISSING',
+      severity: 'MEDIUM',
+      description: 'Receiver signature not detected',
+      resolved: false,
+    });
+  }
+  if (lineItems.some((line) => line.reconStatus === 'SHORT')) {
+    exceptions.push({
+      id: 'ex-short',
+      type: 'SHORT_DELIVERY',
+      severity: 'HIGH',
+      description: 'Received quantity is lower than planned quantity',
+      resolved: false,
+    });
+  }
+  if (lineItems.some((line) => line.reconStatus === 'DAMAGED') || /damage|broken|torn|wet|crushed/.test(remarks)) {
+    exceptions.push({
+      id: 'ex-damaged',
+      type: 'DAMAGED_ITEMS',
+      severity: 'HIGH',
+      description: 'Damage indicators detected in remarks or condition notes',
+      resolved: false,
+    });
+  }
+
+  return exceptions;
+}
+
+function buildAuditTrail(fileName: string, actor: string, classification: { statusLabel: ProcessedItem['statusLabel']; reason: string }) {
+  const timestamp = new Date().toISOString();
+  return [
+    {
+      id: `${fileName}-audit-upload`,
+      timestamp,
+      actor,
+      description: 'File uploaded for ePOD processing',
+    },
+    {
+      id: `${fileName}-audit-ocr`,
+      timestamp,
+      actor: 'system',
+      description: 'OCR extraction completed',
+    },
+    {
+      id: `${fileName}-audit-classification`,
+      timestamp,
+      actor: 'system',
+      description: `Item classified as ${classification.statusLabel}: ${classification.reason}`,
+    },
+  ];
 }
 
 export async function processEpodBatch(
@@ -112,18 +333,44 @@ export async function processEpodBatch(
     if (ocrFields.awb_number) {
       matchedShipment = findShipmentByAwb(ocrFields.awb_number);
     }
-    if (!matchedShipment) {
-      matchedShipment = findShipmentByFileName(file.name);
-    }
 
     // 3. Classify
     const classification = classifyItem(ocrFields, confidence, matchedShipment, selectedAwbs, file.name);
+    const lineItems = buildLineItems(matchedShipment, ocrFields, file.name);
+    const exceptions = buildExceptions(classification, ocrFields, lineItems);
+    const systemData = {
+      awbNumber: matchedShipment?.awbNumber ?? null,
+      shipmentId: matchedShipment?.shipmentId ?? null,
+      fromName: matchedShipment?.origin ?? null,
+      fromSubtext: matchedShipment?.originCity ?? null,
+      toName: matchedShipment?.consigneeName ?? null,
+      toSubtext: matchedShipment?.destination ?? null,
+      transporter: matchedShipment?.transporter ?? null,
+      deliveredDate: matchedShipment?.deliveredDate ?? null,
+      packages: matchedShipment?.packageCount ?? null,
+    };
+    const ocrData = {
+      extractedAwb: ocrFields.awb_number,
+      extractedConsignee: ocrFields.consignee_name,
+      extractedDeliveryDate: ocrFields.delivery_date,
+      extractedFrom: ocrFields.consignor_name ?? ocrFields.from_city,
+      extractedTo: ocrFields.consignee_name ?? ocrFields.to_city,
+      stampPresent: ocrFields.stamp_present,
+      signaturePresent: ocrFields.signature_present,
+      remarks: ocrFields.remarks,
+      conditionNotes: ocrFields.condition_notes,
+      description: ocrFields.description,
+      packages: ocrFields.no_of_packages,
+      rawFields: ocrFields,
+    };
 
     // 4. Build display row
     items.push({
       id: `item-${i}-${Date.now()}`,
+      processingMode: 'bulk',
+      bucket: mapBucket(classification.statusLabel),
       fileName: file.name,
-      awbNumber: ocrFields.awb_number ?? matchedShipment?.awbNumber ?? null,
+      awbNumber: ocrFields.awb_number ?? null,
       shipmentId: matchedShipment?.shipmentId ?? null,
       fromName: matchedShipment?.origin ?? ocrFields.consignor_name ?? null,
       fromSubtext: matchedShipment?.originCity ?? ocrFields.from_city ?? null,
@@ -138,13 +385,24 @@ export async function processEpodBatch(
       confidenceLabel: getConfidenceLabel(confidence),
       stampPresent: ocrFields.stamp_present,
       signaturePresent: ocrFields.signature_present,
+      invoiceNumberExtracted: ocrFields.invoice_number ?? null,
+      invoiceNumberSystem: matchedShipment ? `INV-${matchedShipment.awbNumber}` : null,
+      sentQty: lineItems[0]?.sentQty ?? null,
+      receivedQty: lineItems[0]?.receivedQty ?? null,
+      difference: lineItems[0]?.difference ?? null,
+      deliveryReviewStatus: null,
+      systemData,
+      ocrData,
+      lineItems,
+      exceptions,
+      auditTrail: buildAuditTrail(file.name, 'system', classification),
       ocrFields,
     });
   }
 
   // Build summary
   const summary = {
-    totalAwbs: selectedAwbs?.length ?? items.length,
+    totalAwbs: selectedAwbs && selectedAwbs.length > 0 ? selectedAwbs.length : countMatchedAwbs(items),
     totalUploadedImages: files.length,
     matchedCount: items.filter(i => i.statusLabel === 'Matched').length,
     needsReviewCount: items.filter(i => i.statusLabel === 'Needs Review').length,

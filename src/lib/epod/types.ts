@@ -16,6 +16,76 @@ export interface EpodShipmentRow {
 
 export interface EpodSelectedShipment extends EpodShipmentRow {}
 
+export interface EpodExtractedPodData {
+  awb_number: string | null;
+  transporter_name: string | null;
+  consignor_name: string | null;
+  consignee_name: string | null;
+  from_city: string | null;
+  to_city: string | null;
+  delivery_date: string | null;
+  booking_date: string | null;
+  receiver_name: string | null;
+  stamp_present: boolean;
+  signature_present: boolean;
+  no_of_packages: number | null;
+  weight_kg: number | null;
+  description: string | null;
+  invoice_number: string | null;
+  invoice_value: number | null;
+  freight_mode: string | null;
+  docket_number: string | null;
+  vehicle_number: string | null;
+  remarks: string | null;
+  condition_notes: string | null;
+  booking_branch?: string | null;
+  payment_mode?: string | null;
+  pod_copy_type?: string | null;
+  consignor_address?: string | null;
+  consignor_phone?: string | null;
+  consignor_pin?: string | null;
+  consignee_address?: string | null;
+  consignee_phone?: string | null;
+  consignee_pin?: string | null;
+}
+
+export interface EpodExtractedPodRecord {
+  fileName: string;
+  transporter: string;
+  filePath: string;
+  extractedData: EpodExtractedPodData;
+}
+
+export type EpodDeliveryReviewStatus = 'clean' | 'unclean' | null;
+
+export type EpodSelectedFlowReviewVariant =
+  | 'clean'
+  | 'stamp_missing'
+  | 'signature_missing'
+  | 'quantity_mismatch'
+  | 'invoice_mismatch'
+  | 'partial_extraction'
+  | 'duplicate_upload'
+  | 'not_applicable';
+
+export interface EpodSelectedFlowReviewMeta {
+  processingMode: 'selection';
+  reviewVariant: EpodSelectedFlowReviewVariant;
+  matchedAwb: string | null;
+  invoiceNumberOriginal: string | null;
+  invoiceNumberExtracted: string | null;
+  invoiceValueOriginal: number | null;
+  invoiceValueExtracted: number | null;
+  packageCountOriginal: number | null;
+  packageCountExtracted: number | null;
+  stampPresentOriginal: boolean;
+  stampPresentExtracted: boolean;
+  signaturePresentOriginal: boolean;
+  signaturePresentExtracted: boolean;
+  deliveryReviewStatus: EpodDeliveryReviewStatus;
+  discrepancyReasons: string[];
+}
+
 export interface EpodUploadFile {
   id: string;
   file: File;
@@ -82,7 +152,14 @@ export interface EpodBatchItem {
   approvals: EpodApproval[];
 }
 
-export type EpodProcessingFilter = 'all' | 'matched' | 'needsReview' | 'skipped' | 'unmapped';
+export type EpodProcessingFilter =
+  | 'all'
+  | 'totalAwbs'
+  | 'totalUploaded'
+  | 'matched'
+  | 'needsReview'
+  | 'skipped'
+  | 'unmapped';
 
 export interface EpodProcessedDisplayRow {
   id: string;

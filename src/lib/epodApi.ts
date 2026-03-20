@@ -1,5 +1,75 @@
+export interface ProcessedLineItem {
+  id: string;
+  sku: string | null;
+  description: string;
+  sentQty: number;
+  receivedQty: number;
+  damagedQty: number;
+  difference: number;
+  reconStatus: 'MATCH' | 'SHORT' | 'EXCESS' | 'DAMAGED';
+  reviewAction?: 'ACCEPTED' | 'REJECTED' | 'OVERRIDDEN';
+  note?: string | null;
+}
+
+export interface ProcessedException {
+  id: string;
+  type: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  description: string;
+  resolved: boolean;
+}
+
+export interface ProcessedAuditEvent {
+  id: string;
+  timestamp: string;
+  actor: string;
+  description: string;
+}
+
+export interface ProcessedSystemData {
+  awbNumber: string | null;
+  shipmentId: string | null;
+  fromName: string | null;
+  fromSubtext: string | null;
+  toName: string | null;
+  toSubtext: string | null;
+  transporter: string | null;
+  deliveredDate: string | null;
+  packages: number | null;
+}
+
+export interface ProcessedOcrData {
+  extractedAwb: string | null;
+  extractedConsignee: string | null;
+  extractedDeliveryDate: string | null;
+  extractedFrom: string | null;
+  extractedTo: string | null;
+  stampPresent: boolean;
+  signaturePresent: boolean;
+  remarks: string | null;
+  conditionNotes: string | null;
+  description: string | null;
+  packages: number | null;
+  rawFields: Record<string, unknown>;
+}
+
+export interface ProcessedOcrPatch {
+  extractedAwb?: string | null;
+  extractedConsignee?: string | null;
+  extractedDeliveryDate?: string | null;
+  extractedFrom?: string | null;
+  extractedTo?: string | null;
+  stampPresent?: boolean;
+  signaturePresent?: boolean;
+  remarks?: string | null;
+  conditionNotes?: string | null;
+  deliveryReviewStatus?: 'clean' | 'unclean' | null;
+}
+
 export interface ProcessedItem {
   id: string;
+  processingMode?: 'bulk' | 'selection';
+  bucket?: 'matched' | 'needs_review' | 'unmapped' | 'skipped';
   fileName: string;
   awbNumber: string | null;
   shipmentId: string | null;
@@ -16,7 +86,26 @@ export interface ProcessedItem {
   confidenceLabel: string;
   stampPresent: boolean;
   signaturePresent: boolean;
+  invoiceNumberExtracted?: string | null;
+  invoiceNumberSystem?: string | null;
+  sentQty?: number | null;
+  receivedQty?: number | null;
+  difference?: number | null;
+  deliveryReviewStatus?: 'clean' | 'unclean' | null;
+  systemData: ProcessedSystemData;
+  ocrData: ProcessedOcrData;
+  lineItems: ProcessedLineItem[];
+  exceptions: ProcessedException[];
+  auditTrail: ProcessedAuditEvent[];
   ocrFields: Record<string, unknown>;
+}
+
+function countMatchedAwbs(items: ProcessedItem[]) {
+  return new Set(
+    items
+      .filter((item) => item.statusLabel !== 'Unmapped' && item.awbNumber)
+      .map((item) => String(item.awbNumber).replace(/[\s._-]/g, '').toUpperCase()),
+  ).size;
 }
 
 export interface EpodProcessResult {
@@ -29,6 +118,10 @@ export interface EpodProcessResult {
     unmappedCount: number;
   };
   items: ProcessedItem[];
+}
+
+export interface EpodWorkflowResult extends EpodProcessResult {
+  batchId: string;
 }
 
 /**
@@ -69,19 +162,33 @@ export async function processEpodFiles(
   selectedAwbs: string[],
   source: string = 'TRANSPORTER_PORTAL',
   actor: string = 'transporter',
-  onProgress?: (completed: number, total: number) => void,
+  onProgress?: (completed: number, total: number, stage: number) => void,
 ): Promise<EpodProcessResult> {
   const allItems: ProcessedItem[] = [];
 
   for (let i = 0; i < files.length; i++) {
+    // Stage 0: Reading file (immediate)
+    onProgress?.(i, files.length, 0);
+
+    // Stage 1: Extracting AWB and POD fields (starts with API call)
+    const stageTimer = setTimeout(() => onProgress?.(i, files.length, 1), 300);
+    // Stage 2: Matching (simulated ~2s into the call)
+    const matchTimer = setTimeout(() => onProgress?.(i, files.length, 2), 2500);
+
     const result = await processSingleFile(files[i], selectedAwbs, source, actor);
+
+    clearTimeout(stageTimer);
+    clearTimeout(matchTimer);
+
+    // Stage 3: Preparing reconciliation buckets (file done)
+    onProgress?.(i + 1, files.length, 3);
+
     allItems.push(...result.items);
-    onProgress?.(i + 1, files.length);
   }
 
   // Aggregate summary
   const summary = {
-    totalAwbs: selectedAwbs.length || allItems.length,
+    totalAwbs: selectedAwbs.length || countMatchedAwbs(allItems),
     totalUploadedImages: files.length,
     matchedCount: allItems.filter(i => i.statusLabel === 'Matched').length,
     needsReviewCount: allItems.filter(i => i.statusLabel === 'Needs Review').length,
@@ -90,4 +197,48 @@ export async function processEpodFiles(
   };
 
   return { summary, items: allItems };
+}
+
+export async function createEpodWorkflow(result: EpodProcessResult): Promise<EpodWorkflowResult> {
+  const response = await fetch('/api/epod/workflow', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(result),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(err.error || 'Failed to create review workflow');
+  }
+
+  return response.json();
+}
+
+export async function applyEpodWorkflowAction(input: {
+  batchId: string;
+  itemId: string;
+  actor: string;
+  actionType: 'document' | 'line-review' | 'line-override' | 'exception-resolve' | 'ocr-update';
+  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve';
+  lineId?: string;
+  reviewAction?: 'ACCEPTED' | 'REJECTED';
+  exceptionId?: string;
+  ocrPatch?: ProcessedOcrPatch;
+}): Promise<EpodWorkflowResult> {
+  const response = await fetch('/api/epod/workflow/action', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(err.error || 'Failed to update review workflow');
+  }
+
+  return response.json();
 }

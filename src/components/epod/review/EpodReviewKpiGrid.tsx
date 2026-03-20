@@ -54,10 +54,9 @@ export function EpodReviewKpiGrid(props: EpodReviewKpiGridProps) {
           <Card
             key={item.key}
             bordered
-            className="h-fit cursor-pointer transition-all"
+            className="h-fit cursor-pointer transition-colors"
             style={{
-              borderColor: isActive ? 'var(--primary-700)' : undefined,
-              boxShadow: isActive ? '0 0 0 1px var(--primary-700) inset' : undefined,
+              backgroundColor: isActive ? 'var(--surface-alt)' : undefined,
             }}
             onClick={() => props.onFilterChange(item.filter)}
           >

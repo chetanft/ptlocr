@@ -10,32 +10,34 @@ import {
   TableRow,
   Typography,
 } from 'ft-design-system';
-import type { EpodProcessedDisplayRow } from '@/lib/epod/types';
+import type { ProcessedItem } from '@/lib/epodApi';
 import { rem14 } from '@/lib/rem';
 
 interface EpodReviewResultsTableProps {
-  items: EpodProcessedDisplayRow[];
+  items: ProcessedItem[];
+  onView?: (item: ProcessedItem) => void;
 }
 
 export function EpodReviewResultsTable({
   items,
+  onView,
 }: EpodReviewResultsTableProps) {
-  const headerStyle = { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' };
-
   return (
-    <Table>
+    <Table style={{ tableLayout: 'fixed', width: '100%' }}>
       <TableHeader>
         <TableRow>
-          <TableHead style={headerStyle}>AWB Number</TableHead>
-          <TableHead style={headerStyle}>Shipment ID</TableHead>
-          <TableHead style={headerStyle}>From</TableHead>
-          <TableHead style={headerStyle}>To</TableHead>
-          <TableHead style={headerStyle}>Transporter</TableHead>
-          <TableHead style={headerStyle}>Attachment</TableHead>
-          <TableHead style={headerStyle}>Status</TableHead>
-          <TableHead style={headerStyle}>Data Confidence</TableHead>
-          <TableHead style={headerStyle}>Reason</TableHead>
-          <TableHead className="text-center" style={headerStyle}>Actions</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '11%' }}>AWB Number</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '10%' }}>Shipment ID</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '11%' }}>From</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '11%' }}>To</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '9%' }}>Transporter</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '12%' }}>Attachment</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '10%' }}>Status</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '8%' }}>Data Confidence</TableHead>
+          <TableHead colorVariant="bg" style={{ width: '13%' }}>Reason</TableHead>
+          <TableHead className="text-center" colorVariant="bg" style={{ width: '5%' }}>
+            Actions
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -49,52 +51,51 @@ export function EpodReviewResultsTable({
           </TableRow>
         ) : null}
 
-        {items.map((item) => {
-          return (
-            <TableRow key={item.id}>
-              <TableCell>{item.awbNumber}</TableCell>
-              <TableCell>{item.shipmentId || '—'}</TableCell>
-              <TableCell>
-                <div className="flex flex-col gap-1">
-                  <Typography variant="body-secondary-regular" color="primary">{item.fromName || '—'}</Typography>
-                  {item.fromSubtext ? (
-                    <Typography variant="body-secondary-regular" color="secondary">{item.fromSubtext}</Typography>
-                  ) : null}
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex flex-col gap-1">
-                  <Typography variant="body-secondary-regular" color="primary">{item.toName || '—'}</Typography>
-                  {item.toSubtext ? (
-                    <Typography variant="body-secondary-regular" color="secondary">{item.toSubtext}</Typography>
-                  ) : null}
-                </div>
-              </TableCell>
-              <TableCell>{item.transporter || '—'}</TableCell>
-              <TableCell>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 text-brand-primary hover:underline"
-                  style={{ background: 'transparent', border: 0, padding: 0 }}
-                >
-                  <Icon name="image" size={16} />
-                  {item.fileName}
-                </button>
-              </TableCell>
-              <TableCell>
-                <Badge variant={item.statusVariant}>{item.statusLabel}</Badge>
-              </TableCell>
-              <TableCell>{item.confidenceLabel}</TableCell>
-              <TableCell>{item.reason}</TableCell>
-              <TableCell>
-                <div className="flex items-center justify-center gap-2">
-                  <Button variant="ghost" icon="delete" iconPosition="only" size="sm" disabled />
-                  <Button variant="secondary" icon="chevron-right" iconPosition="only" size="sm" disabled />
-                </div>
-              </TableCell>
-            </TableRow>
-          );
-        })}
+        {items.map((item) => (
+          <TableRow key={item.id}>
+            <TableCell style={{ verticalAlign: 'top' }}>{item.awbNumber || '—'}</TableCell>
+            <TableCell style={{ verticalAlign: 'top' }}>{item.shipmentId || '—'}</TableCell>
+            <TableCell>
+              <div className="flex flex-col gap-1">
+                <Typography variant="body-secondary-regular" color="primary">{item.fromName || '—'}</Typography>
+                {item.fromSubtext ? (
+                  <Typography variant="body-secondary-regular" color="secondary">{item.fromSubtext}</Typography>
+                ) : null}
+              </div>
+            </TableCell>
+            <TableCell>
+              <div className="flex flex-col gap-1">
+                <Typography variant="body-secondary-regular" color="primary">{item.toName || '—'}</Typography>
+                {item.toSubtext ? (
+                  <Typography variant="body-secondary-regular" color="secondary">{item.toSubtext}</Typography>
+                ) : null}
+              </div>
+            </TableCell>
+            <TableCell style={{ verticalAlign: 'top' }}>{item.transporter || '—'}</TableCell>
+            <TableCell>
+              <span className="inline-flex max-w-full items-center gap-2 overflow-hidden text-brand-primary">
+                <Icon name="image" size={16} />
+                <span className="truncate" title={item.fileName}>{item.fileName}</span>
+              </span>
+            </TableCell>
+            <TableCell>
+              <Badge variant={item.statusVariant}>{item.statusLabel}</Badge>
+            </TableCell>
+            <TableCell style={{ verticalAlign: 'top' }}>{item.confidenceLabel}</TableCell>
+            <TableCell style={{ verticalAlign: 'top' }}>
+              <div className="max-w-full truncate" title={item.reason}>
+                {item.reason}
+              </div>
+            </TableCell>
+            <TableCell>
+              <div className="flex items-center justify-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => onView?.(item)}>
+                  View
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
       </TableBody>
     </Table>
   );

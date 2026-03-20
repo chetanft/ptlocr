@@ -11,7 +11,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') }); // It might be i
 
 import { ocrController } from './controllers/ocrController';
 import { podController } from './controllers/podController';
-import { epodBatchController } from './controllers/epodBatchController';
+import { epodWorkflowStore } from './services/epodWorkflowStore';
 import { mockShipmentSeedService } from './services/mockShipmentSeedService';
 
 const app = express();
@@ -72,109 +72,229 @@ app.post('/api/shipments/bulk', (req, res) => podController.bulkCreateShipments(
 // ePOD Serverless-compatible one-shot process endpoint (for local dev)
 app.post('/api/epod/process', upload.array('files', 50), async (req, res) => {
     try {
-        const files = (req.files as Express.Multer.File[]) || [];
-        if (files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+        const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+        if (uploadedFiles.length === 0) {
+            return res.status(400).json({ error: 'No files uploaded' });
+        }
 
         const selectedAwbs: string[] = req.body.selectedAwbs ? JSON.parse(req.body.selectedAwbs) : [];
         const apiKey = process.env.OPENAI_API_KEY;
-
-        // Import processing utilities
-        const fs = await import('fs');
-        const { ocrService } = await import('./services/ocrService');
-
-        // Load shipment master from frontend data
-        const shipmentPath = path.resolve(__dirname, '../../src/data/epodExtractedShipments.json');
-        let shipmentMaster: any[] = [];
-        try { shipmentMaster = JSON.parse(fs.readFileSync(shipmentPath, 'utf8')); } catch {}
-
-        const normalizeAwb = (awb: string) => awb.replace(/[\s\-_.]/g, '').toUpperCase();
-        const findShipment = (awb: string) => shipmentMaster.find(s => normalizeAwb(s.awbNumber) === normalizeAwb(awb));
-        const findByFileName = (name: string) => shipmentMaster.find(s => s.fileName === name);
-
-        const items: any[] = [];
-        for (const file of files) {
-            let ocrFields: any = {};
-            let confidence = 0.1;
-
-            if (apiKey && apiKey !== 'your-openai-api-key-here') {
-                try {
-                    const prompt = `Extract from this POD image as JSON: awb_number, consignee_name, consignor_name, from_city, to_city, stamp_present (bool), signature_present (bool), no_of_packages, weight_kg, remarks, condition_notes. Return valid JSON only.`;
-                    ocrFields = await ocrService.processDocumentWithOpenAI(file.path, prompt);
-                    confidence = 0.8;
-                } catch (e) { console.error('OCR failed for', file.originalname, e); }
-            }
-
-            // Fallback: extract AWB from filename
-            if (!ocrFields.awb_number) {
-                ocrFields.awb_number = file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g, '');
-            }
-
-            const matched = ocrFields.awb_number ? findShipment(ocrFields.awb_number) : null;
-            const matchedByFile = !matched ? findByFileName(file.originalname) : null;
-            const shipment = matched || matchedByFile;
-
-            let statusLabel = 'Unmapped';
-            let statusVariant = 'secondary';
-            let reason = 'No match found';
-
-            if (shipment) {
-                if (selectedAwbs.length > 0 && !selectedAwbs.map(normalizeAwb).includes(normalizeAwb(ocrFields.awb_number))) {
-                    statusLabel = 'Skipped'; statusVariant = 'danger'; reason = 'AWB not in selected scope';
-                } else if (!ocrFields.stamp_present || !ocrFields.signature_present) {
-                    statusLabel = 'Needs Review'; statusVariant = 'warning';
-                    const missing = [!ocrFields.stamp_present && 'stamp', !ocrFields.signature_present && 'signature'].filter(Boolean);
-                    reason = `Missing ${missing.join(' and ')}`;
-                } else {
-                    statusLabel = 'Matched'; statusVariant = 'success'; reason = 'All validations passed';
-                }
-            }
-
-            items.push({
-                id: `item-${items.length}`,
-                fileName: file.originalname,
-                awbNumber: ocrFields.awb_number || shipment?.awbNumber || null,
-                shipmentId: shipment?.shipmentId || null,
-                fromName: shipment?.origin || ocrFields.consignor_name || null,
-                fromSubtext: shipment?.originCity || ocrFields.from_city || null,
-                toName: shipment?.consigneeName || ocrFields.consignee_name || null,
-                toSubtext: shipment?.destination || ocrFields.to_city || null,
-                transporter: shipment?.transporter || null,
-                consigneeName: ocrFields.consignee_name || shipment?.consigneeName || null,
-                statusLabel, statusVariant, reason, confidence,
-                confidenceLabel: confidence >= 0.8 ? 'High' : confidence >= 0.5 ? 'Medium' : 'Low',
-                stampPresent: ocrFields.stamp_present ?? false,
-                signaturePresent: ocrFields.signature_present ?? false,
-                ocrFields,
-            });
-
-            // Cleanup uploaded file
-            try { fs.unlinkSync(file.path); } catch {}
+        if (!apiKey) {
+            return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' });
         }
 
-        const summary = {
-            totalAwbs: selectedAwbs.length || items.length,
-            totalUploadedImages: files.length,
-            matchedCount: items.filter((i: any) => i.statusLabel === 'Matched').length,
-            needsReviewCount: items.filter((i: any) => i.statusLabel === 'Needs Review').length,
-            skippedCount: items.filter((i: any) => i.statusLabel === 'Skipped').length,
-            unmappedCount: items.filter((i: any) => i.statusLabel === 'Unmapped').length,
+        const { readFileSync, unlinkSync } = await import('fs');
+        const { ocrService } = await import('./services/ocrService');
+        const shipmentPath = path.resolve(__dirname, '../../src/data/epodExtractedShipments.json');
+        let shipmentMaster: any[] = [];
+        try {
+            shipmentMaster = JSON.parse(readFileSync(shipmentPath, 'utf8'));
+        } catch {}
+
+        const normalizeAwb = (awb: string) => awb.replace(/[\s\-_.]/g, '').toUpperCase();
+        const findShipment = (awb: string) => shipmentMaster.find((shipment) => normalizeAwb(shipment.awbNumber) === normalizeAwb(awb));
+        const getConfidenceLabel = (confidence: number) => {
+            if (confidence >= 0.8) return 'High';
+            if (confidence >= 0.5) return 'Medium';
+            return 'Low';
         };
 
-        res.json({ summary, items });
+        const items: any[] = [];
+
+        for (const [index, file] of uploadedFiles.entries()) {
+            let ocrFields: any = {
+                awb_number: null,
+                consignee_name: null,
+                consignor_name: null,
+                from_city: null,
+                to_city: null,
+                stamp_present: false,
+                signature_present: false,
+                no_of_packages: null,
+                description: null,
+                invoice_number: null,
+                remarks: null,
+                condition_notes: null,
+            };
+            let confidence = 0;
+
+            try {
+                const prompt = 'Extract as JSON: awb_number, consignee_name, consignor_name, from_city, to_city, delivery_date, stamp_present, signature_present, no_of_packages, description, invoice_number, remarks, condition_notes. Return valid JSON only.';
+                ocrFields = await ocrService.processDocumentWithOpenAI(file.path, prompt);
+                const score = [
+                    Boolean(ocrFields.awb_number),
+                    Boolean(ocrFields.consignee_name),
+                    typeof ocrFields.stamp_present === 'boolean',
+                    typeof ocrFields.signature_present === 'boolean',
+                    Boolean(ocrFields.to_city),
+                ].filter(Boolean).length;
+                confidence = score / 5;
+            } catch (error) {
+                console.error('OCR failed for', file.originalname, error);
+            } finally {
+                try { unlinkSync(file.path); } catch {}
+            }
+
+            const shipment = ocrFields.awb_number ? findShipment(ocrFields.awb_number) : null;
+            const missingSystemFields = shipment
+                ? [
+                    !shipment.shipmentId && 'shipment id',
+                    !shipment.origin && 'from',
+                    !shipment.consigneeName && 'to name',
+                    !shipment.destination && 'to city',
+                    !shipment.transporter && 'transporter',
+                ].filter(Boolean)
+                : [];
+
+            let statusLabel: 'Matched' | 'Needs Review' | 'Skipped' | 'Unmapped' = 'Unmapped';
+            let statusVariant: 'success' | 'warning' | 'danger' | 'secondary' = 'secondary';
+            let reason = 'No AWB detected in image';
+
+            if (!ocrFields.awb_number) {
+                reason = 'No AWB detected in image';
+            } else if (!shipment) {
+                reason = `AWB ${ocrFields.awb_number} not found in shipment master`;
+            } else if (selectedAwbs.length > 0 && !selectedAwbs.map(normalizeAwb).includes(normalizeAwb(ocrFields.awb_number))) {
+                statusLabel = 'Skipped';
+                statusVariant = 'danger';
+                reason = `AWB ${ocrFields.awb_number} not in selected scope`;
+            } else if (confidence < 0.4) {
+                statusLabel = 'Needs Review';
+                statusVariant = 'warning';
+                reason = 'Low OCR confidence — manual verification needed';
+            } else if (missingSystemFields.length > 0) {
+                statusLabel = 'Needs Review';
+                statusVariant = 'warning';
+                reason = `Incomplete shipment data: missing ${missingSystemFields.join(', ')}`;
+            } else if (!ocrFields.stamp_present || !ocrFields.signature_present) {
+                statusLabel = 'Needs Review';
+                statusVariant = 'warning';
+                reason = `Missing ${[!ocrFields.stamp_present && 'stamp', !ocrFields.signature_present && 'signature'].filter(Boolean).join(' and ')}`;
+            } else if (`${ocrFields.remarks || ''} ${ocrFields.condition_notes || ''}`.match(/damage|broken|torn|wet|crushed|short|shortage/i)) {
+                statusLabel = 'Needs Review';
+                statusVariant = 'warning';
+                reason = 'Damage or shortage noted in remarks';
+            } else {
+                statusLabel = 'Matched';
+                statusVariant = 'success';
+                reason = 'AWB matched, all validations passed';
+            }
+
+            const sentQty = shipment?.packageCount ?? ocrFields.no_of_packages ?? 0;
+            const receivedQty = ocrFields.no_of_packages ?? sentQty;
+            const damagedQty = /damage|broken|torn|wet|crushed/i.test(`${ocrFields.remarks || ''} ${ocrFields.condition_notes || ''}`) ? 1 : 0;
+            const difference = receivedQty - sentQty;
+            const reconStatus = damagedQty > 0 ? 'DAMAGED' : difference < 0 ? 'SHORT' : difference > 0 ? 'EXCESS' : 'MATCH';
+
+            items.push({
+                id: `item-${index}-${Date.now()}`,
+                processingMode: 'bulk',
+                bucket: statusLabel === 'Matched' ? 'matched' : statusLabel === 'Needs Review' ? 'needs_review' : statusLabel === 'Skipped' ? 'skipped' : 'unmapped',
+                fileName: file.originalname,
+                awbNumber: ocrFields.awb_number ?? null,
+                shipmentId: shipment?.shipmentId ?? null,
+                fromName: shipment?.origin ?? ocrFields.consignor_name ?? null,
+                fromSubtext: shipment?.originCity ?? ocrFields.from_city ?? null,
+                toName: shipment?.consigneeName ?? ocrFields.consignee_name ?? null,
+                toSubtext: shipment?.destination ?? ocrFields.to_city ?? null,
+                transporter: shipment?.transporter ?? null,
+                consigneeName: ocrFields.consignee_name ?? shipment?.consigneeName ?? null,
+                statusLabel,
+                statusVariant,
+                reason,
+                confidence,
+                confidenceLabel: getConfidenceLabel(confidence),
+                stampPresent: Boolean(ocrFields.stamp_present),
+                signaturePresent: Boolean(ocrFields.signature_present),
+                invoiceNumberExtracted: ocrFields.invoice_number ?? null,
+                invoiceNumberSystem: shipment ? `INV-${shipment.awbNumber}` : null,
+                sentQty,
+                receivedQty,
+                difference,
+                deliveryReviewStatus: null,
+                systemData: {
+                    awbNumber: shipment?.awbNumber ?? null,
+                    shipmentId: shipment?.shipmentId ?? null,
+                    fromName: shipment?.origin ?? null,
+                    fromSubtext: shipment?.originCity ?? null,
+                    toName: shipment?.consigneeName ?? null,
+                    toSubtext: shipment?.destination ?? null,
+                    transporter: shipment?.transporter ?? null,
+                    deliveredDate: shipment?.deliveredDate ?? null,
+                    packages: shipment?.packageCount ?? null,
+                },
+                ocrData: {
+                    extractedAwb: ocrFields.awb_number ?? null,
+                    extractedConsignee: ocrFields.consignee_name ?? null,
+                    extractedDeliveryDate: ocrFields.delivery_date ?? null,
+                    extractedFrom: ocrFields.consignor_name ?? ocrFields.from_city ?? null,
+                    extractedTo: ocrFields.consignee_name ?? ocrFields.to_city ?? null,
+                    stampPresent: Boolean(ocrFields.stamp_present),
+                    signaturePresent: Boolean(ocrFields.signature_present),
+                    remarks: ocrFields.remarks ?? null,
+                    conditionNotes: ocrFields.condition_notes ?? null,
+                    description: ocrFields.description ?? null,
+                    packages: ocrFields.no_of_packages ?? null,
+                    rawFields: ocrFields,
+                },
+                lineItems: [{
+                    id: `${file.originalname}-line-1`,
+                    sku: ocrFields.invoice_number ?? shipment?.shipmentId ?? null,
+                    description: ocrFields.description || 'POD package line',
+                    sentQty,
+                    receivedQty,
+                    damagedQty,
+                    difference,
+                    reconStatus,
+                }],
+                exceptions: [],
+                auditTrail: [
+                    { id: `${file.originalname}-audit-upload`, timestamp: new Date().toISOString(), actor: String(req.body.actor || 'system'), description: 'File uploaded for ePOD processing' },
+                    { id: `${file.originalname}-audit-ocr`, timestamp: new Date().toISOString(), actor: 'system', description: 'OCR extraction completed' },
+                ],
+                ocrFields,
+            });
+        }
+
+        const totalAwbs = new Set(
+            items.filter((item) => item.statusLabel !== 'Unmapped' && item.awbNumber).map((item) => normalizeAwb(String(item.awbNumber)))
+        ).size;
+
+        return res.json({
+            summary: {
+                totalAwbs,
+                totalUploadedImages: uploadedFiles.length,
+                matchedCount: items.filter((item) => item.statusLabel === 'Matched').length,
+                needsReviewCount: items.filter((item) => item.statusLabel === 'Needs Review').length,
+                skippedCount: items.filter((item) => item.statusLabel === 'Skipped').length,
+                unmappedCount: items.filter((item) => item.statusLabel === 'Unmapped').length,
+            },
+            items,
+        });
     } catch (error: any) {
         console.error('ePOD process error:', error);
         res.status(500).json({ error: error.message || 'Processing failed' });
     }
 });
 
-// ePOD Batch APIs (legacy — kept for backward compatibility)
-app.post('/api/epod/batch/create', (req, res) => epodBatchController.createBatch(req, res));
-app.post('/api/epod/batch/:batchId/upload', upload.array('files', 50), (req, res) => epodBatchController.uploadBatchFiles(req, res));
-app.post('/api/epod/batch/:batchId/process', (req, res) => epodBatchController.processBatch(req, res));
-app.get('/api/epod/batch/:batchId', (req, res) => epodBatchController.getBatch(req, res));
-app.get('/api/epod/batch/:batchId/items', (req, res) => epodBatchController.getBatchItems(req, res));
-app.post('/api/epod/batch/:batchId/submit', (req, res) => epodBatchController.submitBatch(req, res));
-app.post('/api/epod/batch/:batchId/cancel', (req, res) => epodBatchController.cancelBatch(req, res));
+app.post('/api/epod/workflow', (req, res) => {
+    try {
+        if (!req.body || !Array.isArray(req.body.items)) {
+            return res.status(400).json({ error: 'Invalid workflow payload' });
+        }
+        return res.json(epodWorkflowStore.create(req.body));
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message || 'Failed to create workflow batch' });
+    }
+});
+
+app.post('/api/epod/workflow/action', (req, res) => {
+    try {
+        return res.json(epodWorkflowStore.applyAction(req.body));
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message || 'Failed to update workflow batch' });
+    }
+});
 
 // Start
 app.listen(port, () => {

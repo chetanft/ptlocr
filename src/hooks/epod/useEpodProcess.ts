@@ -10,15 +10,20 @@ interface UseEpodProcessInput {
 }
 
 export function useEpodProcess() {
-  const [progress, setProgress] = useState({ completed: 0, total: 0 });
+  const [progress, setProgress] = useState({ completed: 0, total: 0, stage: 0 });
 
   const processMutation = useMutation<EpodProcessResult, Error, UseEpodProcessInput>({
     mutationFn: ({ files, selectedAwbs, source, actor }) =>
-      processEpodFiles(files, selectedAwbs, source, actor, (completed, total) => {
-        setProgress({ completed, total });
+      processEpodFiles(files, selectedAwbs, source, actor, (completed, total, stage) => {
+        setProgress((prev) => ({
+          completed,
+          total,
+          // Never go backwards within the same file cycle
+          stage: completed > prev.completed ? stage : Math.max(prev.stage, stage),
+        }));
       }),
     onMutate: () => {
-      setProgress({ completed: 0, total: 0 });
+      setProgress({ completed: 0, total: 0, stage: 0 });
     },
   });
 

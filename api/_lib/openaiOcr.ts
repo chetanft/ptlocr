@@ -99,20 +99,31 @@ export async function extractFieldsFromFile(
     return { result: parsed, confidence: score / total };
   } catch (error: any) {
     console.error('OCR extraction failed:', error.message);
-    // Fallback: try to extract AWB from filename
-    const awbFromFilename = fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g, '');
     return {
       result: {
-        awb_number: awbFromFilename || null,
-        transporter_name: null, consignor_name: null, consignor_address: null,
-        consignee_name: null, consignee_address: null, from_city: null, to_city: null,
-        delivery_date: null, booking_date: null, receiver_name: null,
-        stamp_present: false, signature_present: false,
-        no_of_packages: null, weight_kg: null, description: null,
-        invoice_number: null, invoice_value: null, remarks: null,
-        condition_notes: null, payment_mode: null,
+        awb_number: null,
+        transporter_name: null,
+        consignor_name: null,
+        consignor_address: null,
+        consignee_name: null,
+        consignee_address: null,
+        from_city: null,
+        to_city: null,
+        delivery_date: null,
+        booking_date: null,
+        receiver_name: null,
+        stamp_present: false,
+        signature_present: false,
+        no_of_packages: null,
+        weight_kg: null,
+        description: null,
+        invoice_number: null,
+        invoice_value: null,
+        remarks: null,
+        condition_notes: null,
+        payment_mode: null,
       },
-      confidence: 0.1,
+      confidence: 0,
     };
   }
 }

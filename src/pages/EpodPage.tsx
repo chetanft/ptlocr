@@ -76,6 +76,16 @@ export default function EpodPage() {
 
   const handleOpenUpload = () => {
     if (!user) return;
+    if (selectedShipments.length > 0) {
+      navigate(getEpodUploadPathForRole(user.role), {
+        state: {
+          selectedShipments,
+          uploadMode: 'selection',
+        },
+      });
+      return;
+    }
+
     if (user.role === 'Ops') {
       navigate(getEpodUploadPathForRole(user.role), {
         state: {
@@ -85,14 +95,6 @@ export default function EpodPage() {
       });
       return;
     }
-
-    if (selectedShipments.length === 0) return;
-    navigate(getEpodUploadPathForRole(user.role), {
-      state: {
-        selectedShipments,
-        uploadMode: 'selection',
-      },
-    });
   };
 
   const handlePageChange = (page: number) => {
