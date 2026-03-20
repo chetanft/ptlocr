@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext';
 import extractedShipments from '@/data/epodExtractedShipments.json';
+import { getShipmentStatusOverrides, subscribeShipmentStatusOverrides } from '@/lib/epod/shipmentStatusStore';
 import type { EpodShipmentRow } from '@/lib/epod/types';
 
 const STATUS_VALUES = ['Pending Submission', 'Pending Approval', 'Rejected', 'Approved'] as const;
@@ -33,9 +34,9 @@ function getStatusForIndex(index: number, total: number): EpodShipmentRow['statu
   return 'Approved';
 }
 
-function toShipmentRow(record: ExtractedShipmentRecord, index: number, total: number): EpodShipmentRow {
+function toShipmentRow(record: ExtractedShipmentRecord, index: number, total: number, statusOverride?: EpodShipmentRow['status']): EpodShipmentRow {
   const uploadedAt =
-    record.deliveredDate && getStatusForIndex(index, total) !== 'Pending Submission'
+    record.deliveredDate && (statusOverride ?? getStatusForIndex(index, total)) !== 'Pending Submission'
       ? `${record.deliveredDate} 10:30`
       : undefined;
 
@@ -50,7 +51,7 @@ function toShipmentRow(record: ExtractedShipmentRecord, index: number, total: nu
     packageCount: record.packageCount || 0,
     deliveredDate: toDisplayDate(record.deliveredDate),
     uploadedAt,
-    status: getStatusForIndex(index, total),
+    status: statusOverride ?? getStatusForIndex(index, total),
   };
 }
 
@@ -60,6 +61,11 @@ const SORTED_SHIPMENTS = (extractedShipments as ExtractedShipmentRecord[])
 export function useEpodShipments() {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
+  const [statusVersion, setStatusVersion] = useState(0);
+
+  useEffect(() => subscribeShipmentStatusOverrides(() => setStatusVersion((value) => value + 1)), []);
+
+  const statusOverrides = useMemo(() => getShipmentStatusOverrides(), [statusVersion]);
 
   const scopedRecords = useMemo(() => {
     if (user?.role === 'Transporter') {
@@ -69,8 +75,8 @@ export function useEpodShipments() {
   }, [user?.companyDisplayName, user?.role]);
 
   const scopedShipments = useMemo(
-    () => scopedRecords.map((record, index) => toShipmentRow(record, index, scopedRecords.length)),
-    [scopedRecords],
+    () => scopedRecords.map((record, index) => toShipmentRow(record, index, scopedRecords.length, statusOverrides[record.awbNumber])),
+    [scopedRecords, statusOverrides],
   );
 
   const shipments = useMemo(() => {

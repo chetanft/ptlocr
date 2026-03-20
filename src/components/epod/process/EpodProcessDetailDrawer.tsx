@@ -5,11 +5,6 @@ import {
   Card,
   CardBody,
   CheckboxInput,
-  Descriptions,
-  DescriptionsItem,
-  DescriptionsLabel,
-  DescriptionsTitle,
-  DescriptionsValue,
   Drawer,
   DrawerBody,
   DrawerClose,
@@ -258,41 +253,34 @@ export function EpodProcessDetailDrawer({
 
               <TabsContent value="overview">
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <Descriptions bordered column={1}>
-                    <DescriptionsTitle className="text-[20.6px]">Shipment data in system</DescriptionsTitle>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>AWB Number</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.awbNumber)}</DescriptionsValue>
-                    </DescriptionsItem>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>Shipment ID</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.shipmentId)}</DescriptionsValue>
-                    </DescriptionsItem>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>From</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.fromName)}</DescriptionsValue>
-                    </DescriptionsItem>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>From city</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.fromSubtext)}</DescriptionsValue>
-                    </DescriptionsItem>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>To</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.toName)}</DescriptionsValue>
-                    </DescriptionsItem>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>To city</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.toSubtext)}</DescriptionsValue>
-                    </DescriptionsItem>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>Transporter</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.transporter)}</DescriptionsValue>
-                    </DescriptionsItem>
-                    <DescriptionsItem>
-                      <DescriptionsLabel>Delivered Date</DescriptionsLabel>
-                      <DescriptionsValue>{renderValue(item.systemData.deliveredDate)}</DescriptionsValue>
-                    </DescriptionsItem>
-                  </Descriptions>
+                  <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
+                    <Typography variant="title-secondary" color="primary">
+                      Shipment data in system
+                    </Typography>
+                    <div className="flex flex-col" style={{ gap: rem14(12) }}>
+                      {(
+                        [
+                          ['AWB Number', item.systemData.awbNumber],
+                          ['Shipment ID', item.systemData.shipmentId],
+                          ['From', item.systemData.fromName],
+                          ['From city', item.systemData.fromSubtext],
+                          ['To', item.systemData.toName],
+                          ['To city', item.systemData.toSubtext],
+                          ['Transporter', item.systemData.transporter],
+                          ['Delivered Date', item.systemData.deliveredDate],
+                        ] as const
+                      ).map(([label, value]) => (
+                        <div key={label} className="flex flex-col gap-1">
+                          <span className="font-sans text-sm-rem font-medium leading-[1.4] text-[var(--tertiary)]">
+                            {label}
+                          </span>
+                          <span className="font-sans text-sm-rem font-normal leading-[1.4] text-[var(--primary)] whitespace-pre-wrap">
+                            {renderValue(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
                   <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
                     <Typography variant="title-secondary" color="primary">OCR extracted POD data</Typography>

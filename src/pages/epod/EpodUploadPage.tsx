@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, Button } from 'ft-design-system';
 import { useAuth } from '@/auth/AuthContext';
@@ -29,6 +29,7 @@ import {
   type ProcessedOcrPatch,
 } from '@/lib/epodApi';
 import { processSelectedAwbFlow } from '@/lib/epod/selectedFlowProcessor';
+import { markShipmentsApproved } from '@/lib/epod/shipmentStatusStore';
 import type { EpodProcessingFilter, EpodUploadFile, EpodUploadRouteState } from '@/lib/epod/types';
 import { rem14 } from '@/lib/rem';
 
@@ -75,6 +76,7 @@ export default function EpodUploadPage() {
   const [processingStage, setProcessingStage] = useState(0);
   const [submissionState, setSubmissionState] = useState<SubmissionUiState>('idle');
   const [submissionJob, setSubmissionJob] = useState<EpodSubmissionJob | null>(null);
+  const completedSubmissionJobsRef = useRef<Set<string>>(new Set());
 
   const { processAsync, result, isProcessing, error: processError, progress, reset: resetProcess } = useEpodProcess();
   const isActivelyProcessing = isProcessing || selectionProcessing;
@@ -201,6 +203,27 @@ export default function EpodUploadPage() {
       window.clearInterval(intervalId);
     };
   }, [submissionJob?.jobId, submissionState]);
+
+  useEffect(() => {
+    if (!submissionJob?.jobId) {
+      return;
+    }
+
+    if (submissionState !== 'submitted_success' && submissionState !== 'submitted_failed') {
+      return;
+    }
+
+    if (completedSubmissionJobsRef.current.has(submissionJob.jobId)) {
+      return;
+    }
+
+    completedSubmissionJobsRef.current.add(submissionJob.jobId);
+    markShipmentsApproved(
+      submissionJob.items
+        .filter((item) => item.status === 'Submitted')
+        .map((item) => item.awbNumber),
+    );
+  }, [submissionJob, submissionState]);
 
   const handleFilesSelected = (selectedFiles: FileList) => {
     const nextFiles = Array.from(selectedFiles).map(createUploadFile);
