@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "patch-package || true",
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite",
     "dev:server": "npm run dev --prefix server",
