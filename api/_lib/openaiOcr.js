@@ -150,16 +150,7 @@ async function extractFieldsFromFile(fileBuffer, fileName, apiKey, provider = 'o
     const base64 = fileBuffer.toString('base64');
     const mimeType = getMimeType(fileName);
     const dataUrl = `data:${mimeType};base64,${base64}`;
-    try {
-        return provider === 'gemini'
-            ? await extractWithGemini(base64, mimeType, apiKey)
-            : await extractWithOpenAI(dataUrl, apiKey);
-    }
-    catch (error) {
-        console.error(`${provider} OCR extraction failed:`, error.message);
-        return {
-            result: getEmptyResult(),
-            confidence: 0,
-        };
-    }
+    return provider === 'gemini'
+        ? extractWithGemini(base64, mimeType, apiKey)
+        : extractWithOpenAI(dataUrl, apiKey);
 }

@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { processEpodBatch } from '../_lib/epodProcess.js';
 import { IncomingForm } from 'formidable';
 import { readFileSync, unlinkSync } from 'fs';
 import type { OcrProvider } from '../_lib/openaiOcr.js';
@@ -9,6 +8,19 @@ export const config = {
     bodyParser: false,
   },
 };
+
+async function loadProcessEpodBatch() {
+  const module = await import('../_lib/epodProcess.js');
+  const processEpodBatch =
+    (module as { processEpodBatch?: typeof import('../_lib/epodProcess.ts').processEpodBatch }).processEpodBatch ??
+    (module as { default?: { processEpodBatch?: typeof import('../_lib/epodProcess.ts').processEpodBatch } }).default?.processEpodBatch;
+
+  if (!processEpodBatch) {
+    throw new Error('Failed to load processEpodBatch from epodProcess runtime module');
+  }
+
+  return processEpodBatch;
+}
 
 function parseMultipart(req: VercelRequest): Promise<{
   files: Array<{ buffer: Buffer; name: string }>;
@@ -95,6 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const processEpodBatch = await loadProcessEpodBatch();
     const { files, selectedAwbs, source, actor } = await parseMultipart(req);
 
     if (files.length === 0) {
