@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
-import { join, resolve } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 export interface ShipmentRecord {
   awbNumber: string;
@@ -14,13 +15,21 @@ export interface ShipmentRecord {
   packageCount: number | null;
 }
 
+// ESM-compatible __dirname replacement
+const currentDir = (() => {
+  try {
+    return dirname(fileURLToPath(import.meta.url));
+  } catch {
+    return process.cwd();
+  }
+})();
+
 // Try multiple paths to find the shipment data JSON
-// Vercel bundles files relative to the function, so paths vary
 const CANDIDATE_PATHS = [
   join(process.cwd(), 'src/data/epodExtractedShipments.json'),
-  resolve(__dirname, '../../src/data/epodExtractedShipments.json'),
-  resolve(__dirname, '../../../src/data/epodExtractedShipments.json'),
-  join(process.cwd(), 'api/_lib/../../src/data/epodExtractedShipments.json'),
+  join(currentDir, '../../src/data/epodExtractedShipments.json'),
+  join(currentDir, '../../../src/data/epodExtractedShipments.json'),
+  join(process.cwd(), 'src', 'data', 'epodExtractedShipments.json'),
 ];
 
 let shipments: ShipmentRecord[] = [];
@@ -38,10 +47,10 @@ for (const candidatePath of CANDIDATE_PATHS) {
 }
 
 if (shipments.length === 0) {
-  console.warn('Could not load shipment master JSON from any path, using empty array');
+  console.warn('Could not load shipment master JSON from any path');
 }
 
-// Build lookup map with normalized AWB keys
+// Build lookup map
 const awbMap = new Map<string, ShipmentRecord>();
 for (const s of shipments) {
   awbMap.set(normalizeAwb(s.awbNumber), s);
