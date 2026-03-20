@@ -110,6 +110,7 @@ export default function EpodPage() {
       header={(
         <EpodPageHeader
           title="ePOD"
+          icon="contracted-bill"
           trailing={(
             <EpodFiltersPanel
               search={search}

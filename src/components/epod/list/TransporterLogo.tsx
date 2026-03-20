@@ -1,9 +1,9 @@
-import { MECLogo, OMLogisticsLogo, SafexpressLogo, Typography } from 'ft-design-system';
+import { Logo, Typography } from 'ft-design-system';
 
-const LOGO_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  MEC: MECLogo,
-  'Om Logistics': OMLogisticsLogo,
-  Safexpress: SafexpressLogo,
+const LOGO_NAME_MAP: Record<string, string> = {
+  MEC: 'mec',
+  'Om Logistics': 'om-logistics',
+  Safexpress: 'safexpress',
 };
 
 interface TransporterLogoProps {
@@ -11,26 +11,19 @@ interface TransporterLogoProps {
   showName?: boolean;
 }
 
-export function TransporterLogo({ name, showName = true }: TransporterLogoProps) {
-  const LogoComponent = LOGO_MAP[name];
+export function TransporterLogo({ name, showName = false }: TransporterLogoProps) {
+  const logoName = LOGO_NAME_MAP[name];
 
-  if (LogoComponent) {
+  if (logoName) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <LogoComponent className="h-[22px] w-auto" />
+        <Logo name={logoName} height={20} />
         {showName ? (
-          <Typography variant="body-secondary-regular" color="secondary">
-            {name}
-          </Typography>
+          <Typography variant="body-secondary-regular" color="secondary">{name}</Typography>
         ) : null}
       </div>
     );
   }
 
-  // Fallback: just text for unknown transporters
-  return (
-    <Typography variant="body-secondary-regular" color="primary">
-      {name}
-    </Typography>
-  );
+  return <Typography variant="body-secondary-regular" color="primary">{name}</Typography>;
 }

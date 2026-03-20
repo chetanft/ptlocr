@@ -12,9 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from 'ft-design-system';
-import { rem14 } from '@/lib/rem';
-
-const SELECT_TRIGGER_RADIUS = 'rounded-md';
+import { rem } from '@/lib/rem';
 
 interface EpodFiltersPanelProps {
   search: string;
@@ -23,8 +21,8 @@ interface EpodFiltersPanelProps {
   onTransporterFilterChange: (value: string) => void;
 }
 
-/** Matches SelectItem value so SelectValue shows this label on first paint (design system only sets label after a click). */
-const ALL_TRANSPORTERS = 'all';
+const FILTER_HEIGHT = 40;
+const DROPDOWN_WIDTH = 180;
 
 export function EpodFiltersPanel({
   search,
@@ -37,9 +35,10 @@ export function EpodFiltersPanel({
   const [endDate, setEndDate] = useState('2024-09-12');
 
   return (
-    <div className="flex items-center flex-wrap gap-4">
+    <div className="flex items-center flex-wrap" style={{ gap: rem(12) }}>
+      {/* Location */}
       <Select key="mdc" defaultValue="MDC">
-        <SelectTrigger className={SELECT_TRIGGER_RADIUS} style={{ width: rem14(160) }}>
+        <SelectTrigger style={{ width: rem(DROPDOWN_WIDTH), height: rem(FILTER_HEIGHT) }}>
           <SelectValue placeholder="Location" />
         </SelectTrigger>
         <SelectContent>
@@ -48,21 +47,24 @@ export function EpodFiltersPanel({
         </SelectContent>
       </Select>
 
+      {/* Date Range */}
       <DatePicker
         range
         startValue={startDate}
         endValue={endDate}
         onStartChange={setStartDate}
         onEndChange={setEndDate}
+        size="md"
       />
 
+      {/* Transporter (consignor/ops only) */}
       {user?.role !== 'Transporter' ? (
         <Select value={transporterFilter} onValueChange={onTransporterFilterChange}>
-          <SelectTrigger className={SELECT_TRIGGER_RADIUS} style={{ width: rem14(236) }}>
+          <SelectTrigger style={{ width: rem(DROPDOWN_WIDTH), height: rem(FILTER_HEIGHT) }}>
             <SelectValue placeholder="All Transporters" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_TRANSPORTERS}>All Transporters</SelectItem>
+            <SelectItem value="all">All Transporters</SelectItem>
             <SelectItem value="MEC">MEC</SelectItem>
             <SelectItem value="Om Logistics">Om Logistics</SelectItem>
             <SelectItem value="Safexpress">Safexpress</SelectItem>
@@ -70,34 +72,23 @@ export function EpodFiltersPanel({
         </Select>
       ) : null}
 
-      <div className="relative z-10 flex items-center rounded-md overflow-hidden" style={{ minWidth: rem14(300) }}>
-        <Select key="load-type" defaultValue="All">
-          <SelectTrigger className="rounded-l-md rounded-r-none border-r-0 bg-bg-secondary" style={{ width: rem14(120) }}>
-            <SelectValue placeholder="All Loads" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All Loads</SelectItem>
-            <SelectItem value="surface">Surface Loads</SelectItem>
-            <SelectItem value="priority">Priority Loads</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input className="flex-1 rounded-r-md rounded-l-none">
-          <InputField
-            placeholder="Search AWB, shipment ID or consignee"
-            leadingIcon="search"
-            className="rounded-l-none rounded-r-md border border-solid border-border-primary"
-            value={search}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
-          />
-        </Input>
-      </div>
+      {/* Search */}
+      <Input style={{ width: rem(240) }}>
+        <InputField
+          placeholder="Search AWB, shipment"
+          leadingIcon="search"
+          value={search}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
+          style={{ height: rem(FILTER_HEIGHT) }}
+        />
+      </Input>
 
+      {/* Filter button — outline, same height as search */}
       <Button
-        variant="text"
+        variant="secondary"
         icon="filter"
         iconPosition="only"
         size="md"
-        className={SELECT_TRIGGER_RADIUS}
         aria-label="Filter"
       />
     </div>
