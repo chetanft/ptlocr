@@ -52,78 +52,141 @@ export interface EpodOcrResult {
   payment_mode: string | null;
 }
 
-export async function extractFieldsFromFile(
-  fileBuffer: Buffer,
-  fileName: string,
-  apiKey: string
+export type OcrProvider = 'gemini' | 'openai';
+
+function getEmptyResult(): EpodOcrResult {
+  return {
+    awb_number: null,
+    transporter_name: null,
+    consignor_name: null,
+    consignor_address: null,
+    consignee_name: null,
+    consignee_address: null,
+    from_city: null,
+    to_city: null,
+    delivery_date: null,
+    booking_date: null,
+    receiver_name: null,
+    stamp_present: false,
+    signature_present: false,
+    no_of_packages: null,
+    weight_kg: null,
+    description: null,
+    invoice_number: null,
+    invoice_value: null,
+    remarks: null,
+    condition_notes: null,
+    payment_mode: null,
+  };
+}
+
+function getMimeType(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'gif') return 'image/gif';
+  return 'image/jpeg';
+}
+
+function calculateConfidence(parsed: EpodOcrResult): number {
+  let score = 0;
+  const total = 5;
+  if (parsed.awb_number) score++;
+  if (parsed.consignee_name) score++;
+  if (typeof parsed.stamp_present === 'boolean') score++;
+  if (typeof parsed.signature_present === 'boolean') score++;
+  if (parsed.to_city || parsed.consignee_address) score++;
+  return score / total;
+}
+
+async function extractWithOpenAI(
+  dataUrl: string,
+  apiKey: string,
 ): Promise<{ result: EpodOcrResult; confidence: number }> {
   const openai = new OpenAI({ apiKey });
 
-  const base64 = fileBuffer.toString('base64');
-  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
-  let mimeType = 'image/jpeg';
-  if (ext === 'png') mimeType = 'image/png';
-  if (ext === 'pdf') mimeType = 'application/pdf';
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: EPOD_OCR_PROMPT + '\n\nReturn strictly valid JSON only. No markdown.' },
+          { type: 'image_url', image_url: { url: dataUrl } },
+        ],
+      },
+    ],
+    response_format: { type: 'json_object' },
+  });
 
-  const dataUrl = `data:${mimeType};base64,${base64}`;
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error('Empty OpenAI response');
 
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
+  const parsed = JSON.parse(content) as EpodOcrResult;
+  return { result: parsed, confidence: calculateConfidence(parsed) };
+}
+
+async function extractWithGemini(
+  base64: string,
+  mimeType: string,
+  apiKey: string,
+): Promise<{ result: EpodOcrResult; confidence: number }> {
+  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      contents: [
         {
           role: 'user',
-          content: [
-            { type: 'text', text: EPOD_OCR_PROMPT + '\n\nReturn strictly valid JSON only. No markdown.' },
-            { type: 'image_url', image_url: { url: dataUrl } },
+          parts: [
+            { text: `${EPOD_OCR_PROMPT}\n\nReturn strictly valid JSON only. No markdown.` },
+            {
+              inlineData: {
+                mimeType,
+                data: base64,
+              },
+            },
           ],
         },
       ],
-      response_format: { type: 'json_object' },
-    });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) throw new Error('Empty OpenAI response');
-
-    const parsed = JSON.parse(content) as EpodOcrResult;
-
-    // Calculate confidence based on key fields presence
-    let score = 0;
-    let total = 5;
-    if (parsed.awb_number) score++;
-    if (parsed.consignee_name) score++;
-    if (parsed.stamp_present !== null) score++;
-    if (parsed.signature_present !== null) score++;
-    if (parsed.to_city || parsed.consignee_address) score++;
-
-    return { result: parsed, confidence: score / total };
-  } catch (error: any) {
-    console.error('OCR extraction failed:', error.message);
-    return {
-      result: {
-        awb_number: null,
-        transporter_name: null,
-        consignor_name: null,
-        consignor_address: null,
-        consignee_name: null,
-        consignee_address: null,
-        from_city: null,
-        to_city: null,
-        delivery_date: null,
-        booking_date: null,
-        receiver_name: null,
-        stamp_present: false,
-        signature_present: false,
-        no_of_packages: null,
-        weight_kg: null,
-        description: null,
-        invoice_number: null,
-        invoice_value: null,
-        remarks: null,
-        condition_notes: null,
-        payment_mode: null,
+      generationConfig: {
+        responseMimeType: 'application/json',
       },
-      confidence: 0,
-    };
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini OCR request failed (${response.status}): ${errorText}`);
   }
+
+  const payload = await response.json();
+  const content = payload.candidates?.[0]?.content?.parts
+    ?.map((part: { text?: string }) => part.text ?? '')
+    .join('')
+    .trim();
+
+  if (!content) throw new Error('Empty Gemini response');
+
+  const parsed = JSON.parse(content) as EpodOcrResult;
+  return { result: parsed, confidence: calculateConfidence(parsed) };
+}
+
+export async function extractFieldsFromFile(
+  fileBuffer: Buffer,
+  fileName: string,
+  apiKey: string,
+  provider: OcrProvider = 'openai',
+): Promise<{ result: EpodOcrResult; confidence: number }> {
+  const base64 = fileBuffer.toString('base64');
+  const mimeType = getMimeType(fileName);
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  return provider === 'gemini'
+    ? extractWithGemini(base64, mimeType, apiKey)
+    : extractWithOpenAI(dataUrl, apiKey);
 }

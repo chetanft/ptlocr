@@ -194,13 +194,13 @@ function buildAuditTrail(fileName, actor, classification) {
         },
     ];
 }
-async function processEpodBatch(files, selectedAwbs, apiKey) {
+async function processEpodBatch(files, selectedAwbs, apiKey, provider = 'openai') {
     const items = [];
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         console.log(`Processing ${i + 1}/${files.length}: ${file.name}`);
         // 1. Run OCR
-        const { result: ocrFields, confidence } = await (0, openaiOcr_js_1.extractFieldsFromFile)(file.buffer, file.name, apiKey);
+        const { result: ocrFields, confidence } = await (0, openaiOcr_js_1.extractFieldsFromFile)(file.buffer, file.name, apiKey, provider);
         // 2. Match shipment
         let matchedShipment = null;
         if (ocrFields.awb_number) {

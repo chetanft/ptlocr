@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { applyWorkflowAction } from '../_lib/epodWorkflowStore.js';
+import { applyWorkflowAction } from '../_lib/epodWorkflowStore.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,7 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     return res.status(200).json(applyWorkflowAction(payload));
-  } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Failed to update workflow batch' });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to update workflow batch';
+    return res.status(500).json({ error: message });
   }
 }

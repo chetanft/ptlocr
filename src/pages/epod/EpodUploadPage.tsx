@@ -11,7 +11,8 @@ import { EpodPageHeader } from '@/components/epod/layout/EpodPageHeader';
 import { EpodPageShell } from '@/components/epod/layout/EpodPageShell';
 import { EpodStickyFooter } from '@/components/epod/layout/EpodStickyFooter';
 import { EpodProcessDetailDrawer } from '@/components/epod/process/EpodProcessDetailDrawer';
-import { EpodImagePreviewModal } from '@/components/epod/process/EpodImagePreviewModal';
+import { EpodImagePreviewModal, type EpodImagePreview } from '@/components/epod/process/EpodImagePreviewModal';
+import { createEpodOcrDraft, type EpodOcrDraft } from '@/components/epod/process/epodOcrDraft';
 import { EpodReviewKpiGrid } from '@/components/epod/review/EpodReviewKpiGrid';
 import { EpodReviewResultsTable } from '@/components/epod/review/EpodReviewResultsTable';
 import { EpodSubmissionStatusScreen } from '@/components/epod/submission/EpodSubmissionStatusScreen';
@@ -37,12 +38,6 @@ import { rem14 } from '@/lib/rem';
 const STEPS = ['Upload Images', 'Process Images', 'Review'] as const;
 type SubmissionUiState = 'idle' | 'submitting' | 'submitted_success' | 'submitted_failed';
 type PreviewKind = 'image' | 'pdf' | 'other';
-
-type EpodImagePreview = {
-  fileName: string;
-  previewUrl: string;
-  previewKind: PreviewKind;
-};
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif']);
 
@@ -122,6 +117,8 @@ export default function EpodUploadPage() {
   const [submissionState, setSubmissionState] = useState<SubmissionUiState>('idle');
   const [submissionJob, setSubmissionJob] = useState<EpodSubmissionJob | null>(null);
   const [imagePreview, setImagePreview] = useState<EpodImagePreview | null>(null);
+  const [imagePreviewDraft, setImagePreviewDraft] = useState<EpodOcrDraft | null>(null);
+  const [isSavingImagePreviewDraft, setIsSavingImagePreviewDraft] = useState(false);
   const completedSubmissionJobsRef = useRef<Set<string>>(new Set());
   const filesRef = useRef<EpodUploadFile[]>([]);
 
@@ -205,23 +202,26 @@ export default function EpodUploadPage() {
     };
   }, [previewLookup]);
 
-  const openImagePreview = (preview: EpodImagePreview) => {
+  const openImagePreview = (preview: EpodImagePreview, item?: ProcessedItem | null) => {
     if (preview.previewKind !== 'image') {
       return;
     }
 
+    if (item) {
+      setSelectedProcessItemId(item.id);
+    }
     setImagePreview(preview);
   };
 
-  const openImagePreviewForFileName = (fileName: string) => {
+  const openImagePreviewForFileName = (fileName: string, item?: ProcessedItem | null) => {
     const preview = resolvePreviewForFileName(fileName);
     if (preview) {
-      openImagePreview(preview);
+      openImagePreview(preview, item);
     }
   };
 
   const handlePreviewItem = (item: ProcessedItem) => {
-    openImagePreviewForFileName(item.fileName);
+    openImagePreviewForFileName(item.fileName, item);
   };
 
   const processCounts = useMemo(
@@ -258,6 +258,14 @@ export default function EpodUploadPage() {
     () => (selectedProcessItem ? resolvePreviewForFileName(selectedProcessItem.fileName) : null),
     [resolvePreviewForFileName, selectedProcessItem],
   );
+  useEffect(() => {
+    if (!imagePreview || !selectedProcessItem) {
+      setImagePreviewDraft(null);
+      return;
+    }
+
+    setImagePreviewDraft(createEpodOcrDraft(selectedProcessItem));
+  }, [imagePreview, selectedProcessItem]);
   const reviewItems = useMemo(
     () => workingItems.filter((item) => item.statusLabel !== 'Unmapped'),
     [workingItems],
@@ -350,6 +358,7 @@ export default function EpodUploadPage() {
 
     if (imagePreview?.previewUrl === removedFile?.previewUrl) {
       setImagePreview(null);
+      setImagePreviewDraft(null);
     }
   };
 
@@ -446,21 +455,35 @@ export default function EpodUploadPage() {
     }
   };
 
-  const handleSaveOcrEdits = async (ocrPatch: ProcessedOcrPatch) => {
-    if (!workflowBatchId || !selectedProcessItemId) {
+  const handleSaveOcrEditsForItem = async (itemId: string, ocrPatch: ProcessedOcrPatch) => {
+    if (!workflowBatchId) {
       return;
     }
     try {
       setWorkflowError(null);
       await syncWorkflow({
         batchId: workflowBatchId,
-        itemId: selectedProcessItemId,
+        itemId,
         actor,
         actionType: 'ocr-update',
         ocrPatch,
       });
     } catch (error: unknown) {
       setWorkflowError(error instanceof Error ? error.message : 'Failed to save OCR edits');
+      throw error;
+    }
+  };
+
+  const handleSaveImagePreviewDraft = async () => {
+    if (!selectedProcessItemId || !imagePreviewDraft) {
+      return;
+    }
+
+    try {
+      setIsSavingImagePreviewDraft(true);
+      await handleSaveOcrEditsForItem(selectedProcessItemId, imagePreviewDraft);
+    } finally {
+      setIsSavingImagePreviewDraft(false);
     }
   };
 
@@ -663,15 +686,30 @@ export default function EpodUploadPage() {
         role={user?.role ?? 'Transporter'}
         onOpenChange={setDrawerOpen}
         onDocumentAction={handleDocumentAction}
-        onSaveOcrEdits={handleSaveOcrEdits}
         onLineReview={handleLineReview}
         onLineOverride={handleLineOverride}
         onResolveException={handleResolveException}
         previewUrl={selectedProcessPreview?.previewUrl ?? null}
         canPreview={Boolean(selectedProcessPreview?.previewUrl)}
-        onPreview={selectedProcessItem ? () => openImagePreviewForFileName(selectedProcessItem.fileName) : undefined}
+        onPreview={selectedProcessItem ? () => openImagePreviewForFileName(selectedProcessItem.fileName, selectedProcessItem) : undefined}
       />
-      <EpodImagePreviewModal open={Boolean(imagePreview)} preview={imagePreview} onOpenChange={(open) => !open && setImagePreview(null)} />
+      <EpodImagePreviewModal
+        open={Boolean(imagePreview)}
+        item={selectedProcessItem}
+        preview={imagePreview}
+        role={user?.role ?? 'Transporter'}
+        draft={imagePreviewDraft}
+        onDraftChange={setImagePreviewDraft}
+        onSaveOcrEdits={handleSaveImagePreviewDraft}
+        isSaving={isSavingImagePreviewDraft}
+        errorMessage={workflowError}
+        onOpenChange={(open) => {
+          if (!open) {
+            setImagePreview(null);
+            setImagePreviewDraft(null);
+          }
+        }}
+      />
     </div>
   );
 

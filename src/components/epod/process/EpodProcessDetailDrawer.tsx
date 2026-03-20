@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   CardBody,
-  CheckboxInput,
   Drawer,
   DrawerBody,
   DrawerClose,
@@ -12,9 +11,6 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-  Input,
-  InputField,
-  InputLabel,
   Table,
   TableBody,
   TableCell,
@@ -25,28 +21,14 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  Textarea,
-  TextareaField,
-  TextareaLabel,
   Typography,
 } from 'ft-design-system';
-import { useEffect, useMemo, useState } from 'react';
-import type { ProcessedItem, ProcessedLineItem, ProcessedOcrPatch } from '@/lib/epodApi';
+import type { ProcessedItem, ProcessedLineItem } from '@/lib/epodApi';
 import { ExceptionBadge } from '@/components/pod/ExceptionBadge';
 import { rem14 } from '@/lib/rem';
+import { createEpodOcrDraft } from './epodOcrDraft';
 
 type Role = 'Transporter' | 'Ops' | 'Reviewer';
-type DeliveryReviewStatus = 'clean' | 'unclean' | null;
-
-type ReviewDraft = ProcessedOcrPatch & {
-  deliveryReviewStatus?: DeliveryReviewStatus;
-};
-
-type ReviewedItem = ProcessedItem & {
-  ocrData: ProcessedItem['ocrData'] & {
-    deliveryReviewStatus?: DeliveryReviewStatus;
-  };
-};
 
 interface EpodProcessDetailDrawerProps {
   item: ProcessedItem | null;
@@ -54,7 +36,6 @@ interface EpodProcessDetailDrawerProps {
   role: Role;
   onOpenChange: (open: boolean) => void;
   onDocumentAction: (action: 'reject' | 'sendToReviewer' | 'approve') => void;
-  onSaveOcrEdits: (patch: ProcessedOcrPatch) => void;
   onLineReview: (lineId: string, action: 'ACCEPTED' | 'REJECTED') => void;
   onLineOverride: (lineId: string) => void;
   onResolveException: (exceptionId: string) => void;
@@ -65,21 +46,6 @@ interface EpodProcessDetailDrawerProps {
 
 function renderValue(value: string | number | null | undefined) {
   return value === null || value === undefined || value === '' ? '—' : String(value);
-}
-
-function createDraftFromItem(item: ProcessedItem): ReviewDraft {
-  return {
-    extractedAwb: item.ocrData.extractedAwb,
-    extractedConsignee: item.ocrData.extractedConsignee,
-    extractedDeliveryDate: item.ocrData.extractedDeliveryDate,
-    extractedFrom: item.ocrData.extractedFrom,
-    extractedTo: item.ocrData.extractedTo,
-    stampPresent: item.ocrData.stampPresent,
-    signaturePresent: item.ocrData.signaturePresent,
-    remarks: item.ocrData.remarks,
-    conditionNotes: item.ocrData.conditionNotes,
-    deliveryReviewStatus: (item as ReviewedItem).ocrData.deliveryReviewStatus ?? null,
-  };
 }
 
 function ReconciliationTab({
@@ -162,7 +128,6 @@ export function EpodProcessDetailDrawer({
   role,
   onOpenChange,
   onDocumentAction,
-  onSaveOcrEdits,
   onLineReview,
   onLineOverride,
   onResolveException,
@@ -171,20 +136,7 @@ export function EpodProcessDetailDrawer({
   onPreview,
 }: EpodProcessDetailDrawerProps) {
   const readOnly = role === 'Transporter';
-  const [draft, setDraft] = useState<ReviewDraft | null>(null);
-
-  useEffect(() => {
-    setDraft(item ? createDraftFromItem(item) : null);
-  }, [item]);
-
-  const hasDraftChanges = useMemo(() => {
-    if (!item || !draft) {
-      return false;
-    }
-    const original = createDraftFromItem(item);
-    return JSON.stringify(original) !== JSON.stringify(draft);
-  }, [draft, item]);
-
+  const draft = item ? createEpodOcrDraft(item) : null;
   const deliveryReviewStatus = draft?.deliveryReviewStatus ?? null;
   const isClean = deliveryReviewStatus === 'clean';
   const isUnclean = deliveryReviewStatus === 'unclean';
@@ -211,14 +163,6 @@ export function EpodProcessDetailDrawer({
             </Button>,
           ]
       : [];
-
-  const updateDraft = (next: Partial<ReviewDraft>) => {
-    setDraft((previous) => ({
-      ...(previous ?? createDraftFromItem(item)),
-      ...next,
-    }));
-  };
-
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent placement="right" width={760}>
@@ -344,106 +288,46 @@ export function EpodProcessDetailDrawer({
                       <Typography variant="title-secondary" color="primary" className="text-md">
                         OCR extracted POD data
                       </Typography>
-                      <Input>
-                        <InputLabel>Extracted AWB</InputLabel>
-                        <InputField
-                          value={draft.extractedAwb ?? ''}
-                          onChange={(event) => updateDraft({ extractedAwb: event.target.value || null })}
-                          disabled={readOnly}
-                        />
-                      </Input>
-                      <Input>
-                        <InputLabel>Extracted Consignee</InputLabel>
-                        <InputField
-                          value={draft.extractedConsignee ?? ''}
-                          onChange={(event) => updateDraft({ extractedConsignee: event.target.value || null })}
-                          disabled={readOnly}
-                        />
-                      </Input>
-                      <Input>
-                        <InputLabel>Extracted Delivery Date</InputLabel>
-                        <InputField
-                          value={draft.extractedDeliveryDate ?? ''}
-                          onChange={(event) => updateDraft({ extractedDeliveryDate: event.target.value || null })}
-                          disabled={readOnly}
-                        />
-                      </Input>
-                      <Input>
-                        <InputLabel>Extracted From</InputLabel>
-                        <InputField
-                          value={draft.extractedFrom ?? ''}
-                          onChange={(event) => updateDraft({ extractedFrom: event.target.value || null })}
-                          disabled={readOnly}
-                        />
-                      </Input>
-                      <Input>
-                        <InputLabel>Extracted To</InputLabel>
-                        <InputField
-                          value={draft.extractedTo ?? ''}
-                          onChange={(event) => updateDraft({ extractedTo: event.target.value || null })}
-                          disabled={readOnly}
-                        />
-                      </Input>
-                      <div className="grid grid-cols-2 gap-4">
-                        <label className="flex items-center gap-2">
-                          <CheckboxInput
-                            checked={draft.stampPresent ?? false}
-                            onChange={(event) => updateDraft({ stampPresent: event.target.checked })}
-                            disabled={readOnly}
-                          />
-                          <Typography variant="body-secondary-regular" color="primary">Stamp present</Typography>
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <CheckboxInput
-                            checked={draft.signaturePresent ?? false}
-                            onChange={(event) => updateDraft({ signaturePresent: event.target.checked })}
-                            disabled={readOnly}
-                          />
-                          <Typography variant="body-secondary-regular" color="primary">Signature present</Typography>
-                        </label>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {(
+                          [
+                            ['Extracted AWB', draft.extractedAwb],
+                            ['Extracted Consignee', draft.extractedConsignee],
+                            ['Extracted Delivery Date', draft.extractedDeliveryDate],
+                            ['Extracted From', draft.extractedFrom],
+                            ['Extracted To', draft.extractedTo],
+                            ['Remarks', draft.remarks],
+                            ['Condition Notes', draft.conditionNotes],
+                          ] as const
+                        ).map(([label, value]) => (
+                          <div key={label} className="flex flex-col gap-1">
+                            <Typography variant="body-secondary-medium" color="secondary">
+                              {label}
+                            </Typography>
+                            <Typography variant="body-secondary-regular" color="primary">
+                              {renderValue(value)}
+                            </Typography>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <Typography variant="body-primary-medium" color="primary">Delivery review outcome</Typography>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            variant={isClean ? 'primary' : 'secondary'}
-                            size="sm"
-                            onClick={() => updateDraft({ deliveryReviewStatus: 'clean' })}
-                            disabled={readOnly}
-                          >
-                            Clean delivery
-                          </Button>
-                          <Button
-                            variant={isUnclean ? 'primary' : 'secondary'}
-                            size="sm"
-                            onClick={() => updateDraft({ deliveryReviewStatus: 'unclean' })}
-                            disabled={readOnly}
-                          >
-                            Unclean delivery
-                          </Button>
-                          {deliveryReviewStatus ? (
-                            <Badge variant={deliveryReviewStatus === 'clean' ? 'success' : 'warning'}>
-                              {deliveryReviewStatus === 'clean' ? 'Clean' : 'Unclean'}
-                            </Badge>
-                          ) : null}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={draft.stampPresent ? 'success' : 'secondary'}>
+                          {draft.stampPresent ? 'Stamp present' : 'Stamp missing'}
+                        </Badge>
+                        <Badge variant={draft.signaturePresent ? 'success' : 'secondary'}>
+                          {draft.signaturePresent ? 'Signature present' : 'Signature missing'}
+                        </Badge>
+                        {deliveryReviewStatus ? (
+                          <Badge variant={deliveryReviewStatus === 'clean' ? 'success' : 'warning'}>
+                            {deliveryReviewStatus === 'clean' ? 'Clean delivery' : 'Unclean delivery'}
+                          </Badge>
+                        ) : null}
                       </div>
-                      <Textarea>
-                        <TextareaLabel>Remarks</TextareaLabel>
-                        <TextareaField
-                          value={draft.remarks ?? ''}
-                          onChange={(event) => updateDraft({ remarks: event.target.value || null })}
-                          disabled={readOnly}
-                        />
-                      </Textarea>
-                      <Textarea>
-                        <TextareaLabel>Condition Notes</TextareaLabel>
-                        <TextareaField
-                          value={draft.conditionNotes ?? ''}
-                          onChange={(event) => updateDraft({ conditionNotes: event.target.value || null })}
-                          disabled={readOnly}
-                        />
-                      </Textarea>
+                      {!readOnly && onPreview ? (
+                        <Button variant="secondary" onClick={onPreview}>
+                          Open image review workspace
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -511,11 +395,6 @@ export function EpodProcessDetailDrawer({
               Close
             </Button>
             <div className="flex items-center gap-3">
-              {!readOnly ? (
-                <Button variant="secondary" onClick={() => onSaveOcrEdits(draft as ProcessedOcrPatch)} disabled={!hasDraftChanges}>
-                  Save changes
-                </Button>
-              ) : null}
               {footerActions}
             </div>
           </div>

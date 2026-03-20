@@ -1,5 +1,5 @@
-import { extractFieldsFromFile, type EpodOcrResult } from './openaiOcr.js';
-import { findShipmentByAwb, normalizeAwb, type ShipmentRecord } from './shipmentMaster.js';
+import { extractFieldsFromFile, type EpodOcrResult, type OcrProvider } from './openaiOcr.ts';
+import { findShipmentByAwb, normalizeAwb, type ShipmentRecord } from './shipmentMaster.ts';
 
 export interface ProcessedItem {
   id: string;
@@ -318,6 +318,7 @@ export async function processEpodBatch(
   files: Array<{ buffer: Buffer; name: string }>,
   selectedAwbs: string[] | null,
   apiKey: string,
+  provider: OcrProvider = 'openai',
 ): Promise<ProcessBatchResult> {
   const items: ProcessedItem[] = [];
 
@@ -326,7 +327,7 @@ export async function processEpodBatch(
     console.log(`Processing ${i + 1}/${files.length}: ${file.name}`);
 
     // 1. Run OCR
-    const { result: ocrFields, confidence } = await extractFieldsFromFile(file.buffer, file.name, apiKey);
+    const { result: ocrFields, confidence } = await extractFieldsFromFile(file.buffer, file.name, apiKey, provider);
 
     // 2. Match shipment
     let matchedShipment: ShipmentRecord | null = null;

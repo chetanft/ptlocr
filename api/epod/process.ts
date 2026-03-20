@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { processEpodBatch } from '../_lib/epodProcess.js';
+import { processEpodBatch } from '../_lib/epodProcess.ts';
 import { IncomingForm } from 'formidable';
 import { readFileSync, unlinkSync } from 'fs';
+import type { OcrProvider } from '../_lib/openaiOcr.ts';
 
 export const config = {
   api: {
@@ -22,7 +23,7 @@ function parseMultipart(req: VercelRequest): Promise<{
       keepExtensions: true,
     });
 
-    form.parse(req, (err: any, fields: any, files: any) => {
+    form.parse(req, (err: Error | null, fields: Record<string, string | string[]>, files: Record<string, unknown>) => {
       if (err) {
         console.error('Formidable parse error:', err);
         return reject(new Error('File upload parsing failed: ' + err.message));
@@ -41,7 +42,9 @@ function parseMultipart(req: VercelRequest): Promise<{
             buffer: buf,
             name: f.originalFilename || f.newFilename || 'unknown',
           });
-          try { unlinkSync(f.filepath); } catch {}
+          try { unlinkSync(f.filepath); } catch {
+            // Ignore temp-file cleanup failures.
+          }
         }
 
         // Parse fields (formidable v3 wraps values in arrays)
@@ -54,7 +57,9 @@ function parseMultipart(req: VercelRequest): Promise<{
         let selectedAwbs: string[] = [];
         const rawAwbs = getField('selectedAwbs');
         if (rawAwbs) {
-          try { selectedAwbs = JSON.parse(rawAwbs); } catch {}
+          try { selectedAwbs = JSON.parse(rawAwbs) as string[]; } catch {
+            // Ignore invalid selectedAwbs payloads and continue with an empty list.
+          }
         }
 
         resolve({
@@ -63,8 +68,9 @@ function parseMultipart(req: VercelRequest): Promise<{
           source: getField('source') || 'TRANSPORTER_PORTAL',
           actor: getField('actor') || 'unknown',
         });
-      } catch (parseErr: any) {
-        reject(new Error('Failed to process uploaded files: ' + parseErr.message));
+      } catch (parseErr: unknown) {
+        const message = parseErr instanceof Error ? parseErr.message : String(parseErr);
+        reject(new Error('Failed to process uploaded files: ' + message));
       }
     });
   });
@@ -82,9 +88,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const provider: OcrProvider = process.env.GEMINI_API_KEY ? 'gemini' : 'openai';
+  const apiKey = provider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' });
+    return res.status(500).json({ error: 'No OCR provider API key configured on server' });
   }
 
   try {
@@ -94,19 +101,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'No files received. Make sure files are sent as form field named "files".' });
     }
 
-    console.log(`Processing ${files.length} file(s) | actor=${actor} | source=${source} | selectedAwbs=${selectedAwbs.length}`);
+    console.log(`Processing ${files.length} file(s) | provider=${provider} | actor=${actor} | source=${source} | selectedAwbs=${selectedAwbs.length}`);
 
     const result = await processEpodBatch(
       files,
       selectedAwbs.length > 0 ? selectedAwbs : null,
       apiKey,
+      provider,
     );
 
     return res.status(200).json(result);
-  } catch (error: any) {
-    console.error('ePOD process error:', error?.message || error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('ePOD process error:', message);
     return res.status(500).json({
-      error: error?.message || 'Processing failed',
+      error: message || 'Processing failed',
       details: process.env.NODE_ENV !== 'production' ? String(error) : undefined,
     });
   }
