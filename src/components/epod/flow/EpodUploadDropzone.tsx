@@ -30,8 +30,8 @@ export function EpodUploadDropzone({
       onClick={() => document.getElementById(inputId)?.click()}
       onDragOver={(event) => event.preventDefault()}
       onDrop={handleDrop}
-      className="flex cursor-pointer flex-col items-center rounded-md border border-dashed border-border-primary bg-bg-secondary text-center"
-      style={{ gap: rem14(16), padding: rem14(24), minHeight: rem14(180) }}
+      className="flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border-primary bg-bg-secondary text-center"
+      style={{ gap: rem14(20), padding: rem14(24), height: '100%' }}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {

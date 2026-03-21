@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, Button } from 'ft-design-system';
+import { Badge, Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, Button } from 'ft-design-system';
 import { useAuth } from '@/auth/AuthContext';
 import { getEpodJobPathForRole, getEpodListPathForRole } from '@/auth/routeUtils';
 import { EpodProcessingStageLoader } from '@/components/epod/flow/EpodProcessingStageLoader';
@@ -250,6 +250,10 @@ export default function EpodUploadPage() {
   }, [activeProcessFilter, workingItems]);
 
   const totalAwbCount = uploadMode === 'selection' ? selectedShipments.length : (processResult?.summary.totalAwbs ?? 0);
+  const selectedAwbBadgeLabel =
+    uploadMode === 'selection'
+      ? `${selectedShipments.length} AWB${selectedShipments.length === 1 ? '' : 's'} selected`
+      : null;
   const selectedProcessItem = useMemo(
     () => workingItems.find((item) => item.id === selectedProcessItemId) ?? null,
     [selectedProcessItemId, workingItems],
@@ -652,14 +656,14 @@ export default function EpodUploadPage() {
   }
 
   const content = (
-    <div className="flex flex-col" style={{ gap: rem14(40) }}>
+    <div className="flex flex-col" style={{ gap: rem14(64) }}>
       <EpodProgressStepper steps={STEPS} currentStep={currentStep} />
 
       {processError ? <EpodErrorState message={processError} /> : null}
       {workflowError ? <EpodErrorState message={workflowError} /> : null}
 
       {currentStep === 0 ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex min-h-0 flex-col gap-4" style={{ minHeight: rem14(220) }}>
           <EpodUploadDropzone onFileSelect={handleFilesSelected} />
           {files.length > 0 ? <EpodUploadedFileList files={files} onRemove={handleRemoveFile} /> : null}
         </div>
@@ -689,6 +693,7 @@ export default function EpodUploadPage() {
         onLineReview={handleLineReview}
         onLineOverride={handleLineOverride}
         onResolveException={handleResolveException}
+        onSaveOcrEdits={(ocrPatch) => (selectedProcessItem ? handleSaveOcrEditsForItem(selectedProcessItem.id, ocrPatch) : undefined)}
         previewUrl={selectedProcessPreview?.previewUrl ?? null}
         canPreview={Boolean(selectedProcessPreview?.previewUrl)}
         onPreview={selectedProcessItem ? () => openImagePreviewForFileName(selectedProcessItem.fileName, selectedProcessItem) : undefined}
@@ -728,7 +733,17 @@ export default function EpodUploadPage() {
           </BreadcrumbList>
         </Breadcrumb>
       )}
-      header={<EpodPageHeader title="Upload ePOD images" onBack={() => navigate(-1)} />}
+      header={(
+        <EpodPageHeader
+          title={(
+            <span className="inline-flex flex-wrap items-center gap-3">
+              <span>Upload ePOD images</span>
+              {selectedAwbBadgeLabel ? <Badge variant="secondary">{selectedAwbBadgeLabel}</Badge> : null}
+            </span>
+          )}
+          onBack={() => navigate(-1)}
+        />
+      )}
       footer={footer}
     >
       {uploadMode === 'selection' ? (

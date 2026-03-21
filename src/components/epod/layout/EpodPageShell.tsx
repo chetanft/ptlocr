@@ -15,7 +15,7 @@ export function EpodPageShell({ breadcrumbs, header, actionBar, footer, children
       {breadcrumbs && <div style={{ paddingInline: rem14(20), paddingTop: rem14(8) }}>{breadcrumbs}</div>}
       <div style={{ paddingInline: rem14(19), paddingTop: 0, paddingBottom: 0 }}>{header}</div>
       {actionBar && <div style={{ paddingInline: rem14(20), paddingBottom: rem14(16) }}>{actionBar}</div>}
-      <div className="flex-1" style={{ paddingInline: rem14(20), paddingBottom: rem14(20) }}>{children}</div>
+      <div className="flex-1" style={{ paddingInline: rem14(20), paddingTop: rem14(20), paddingBottom: rem14(20) }}>{children}</div>
       {footer}
     </div>
   );
