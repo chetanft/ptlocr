@@ -266,10 +266,10 @@ function ReconciliationTab({
               </Typography>
               <div className="flex items-center gap-3">
                 <Button variant="primary" disabled>
-                  Approve as Clean
+                  Mark Clean
                 </Button>
                 <Button variant="secondary" disabled>
-                  Approve as Unclean
+                  Mark Unclean
                 </Button>
                 <Button variant="secondary" disabled>
                   Reject
@@ -294,10 +294,10 @@ function ReconciliationTab({
               </Typography>
               <div className="flex items-center gap-3">
                 <Button variant="primary" onClick={() => onDocumentAction('approveClean')}>
-                  Approve as Clean
+                  Mark Clean
                 </Button>
                 <Button variant="secondary" onClick={() => onDocumentAction('approveUnclean')}>
-                  Approve as Unclean
+                  Mark Unclean
                 </Button>
                 <Button variant="secondary" onClick={() => onDocumentAction('approveRejection')}>
                   Reject
@@ -363,6 +363,29 @@ const ACTION_BUTTON_STYLES = {
   reject: { color: 'var(--critical)', borderColor: 'var(--critical)' },
 } as const;
 
+function getDrawerDocumentStatus(item: ProcessedItem): {
+  label: string;
+  variant: 'success' | 'warning' | 'danger' | 'secondary';
+} {
+  const allLineItemsDecided =
+    item.lineItems.length > 0 && item.lineItems.every((line) => line.reviewAction && line.reviewAction !== 'PENDING');
+
+  if (item.finalDocumentDecision === 'clean') {
+    return { label: 'Approved', variant: 'success' };
+  }
+  if (item.finalDocumentDecision === 'unclean') {
+    return { label: 'Approved', variant: 'success' };
+  }
+  if (item.finalDocumentDecision === 'rejected') {
+    return { label: 'Rejected', variant: 'danger' };
+  }
+  if (item.finalDocumentDecision === 'pending_approval' || allLineItemsDecided) {
+    return { label: 'Pending Approval', variant: 'secondary' };
+  }
+
+  return { label: item.statusLabel, variant: item.statusVariant };
+}
+
 export function EpodProcessDetailDrawer({
   item,
   open,
@@ -403,6 +426,7 @@ export function EpodProcessDetailDrawer({
 
   const comparisonRows = getDrawerComparisonRows(item, draft);
   const lineStatuses = Array.from(new Set(item.lineItems.map((line) => line.reconStatus)));
+  const drawerDocumentStatus = getDrawerDocumentStatus(item);
   const reconciliationBadgeStatuses =
     lineStatuses.length > 0 && lineStatuses.every((status) => status === 'MATCH')
       ? ['MATCH' as const]
@@ -475,7 +499,7 @@ export function EpodProcessDetailDrawer({
               <DrawerTitle className="text-[1rem] font-semibold leading-6">{item.fileName}</DrawerTitle>
                 <div className="flex items-center gap-2">
                   <div className="inline-flex w-fit">
-                    <Badge variant={item.statusVariant}>{item.statusLabel}</Badge>
+                    <Badge variant={drawerDocumentStatus.variant}>{drawerDocumentStatus.label}</Badge>
                   </div>
                   <div className="inline-flex w-fit">
                     <Badge variant="secondary">{item.confidenceLabel} confidence</Badge>
@@ -516,7 +540,7 @@ export function EpodProcessDetailDrawer({
                 style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 0 }}
               >
                 <TabsTrigger className="w-full rounded-none" style={{ justifyContent: 'center', textAlign: 'center' }} value="overview">Overview</TabsTrigger>
-                <TabsTrigger className="w-full rounded-none" style={{ justifyContent: 'center', textAlign: 'center' }} value="reconciliation">Reconciliation</TabsTrigger>
+                <TabsTrigger className="w-full rounded-none" style={{ justifyContent: 'center', textAlign: 'center' }} value="reconciliation">Shipment details</TabsTrigger>
                 <TabsTrigger className="w-full rounded-none" style={{ justifyContent: 'center', textAlign: 'center' }} value="exceptions">Exceptions</TabsTrigger>
                 <TabsTrigger className="w-full rounded-none" style={{ justifyContent: 'center', textAlign: 'center' }} value="audit">Audit</TabsTrigger>
               </TabsList>
@@ -572,8 +596,6 @@ export function EpodProcessDetailDrawer({
                       </div>
                     )
                   ) : null}
-
-                  <OverviewCard title="System shipment data" fields={getSystemShipmentFields(item)} />
 
                   <div className="flex flex-col py-1" style={{ gap: rem14(12) }}>
                     <Typography variant="body-primary-medium" color="primary" className="text-[1rem] font-semibold leading-6">
@@ -725,23 +747,30 @@ export function EpodProcessDetailDrawer({
                       </div>
                     ) : null}
                   </div>
+
+                  <div className="flex flex-col py-1" style={{ gap: rem14(12) }}>
+                    <Typography variant="body-primary-medium" color="primary" className="text-[1rem] font-semibold leading-6">
+                      Reconciliation
+                    </Typography>
+                    <ReconciliationTab
+                      item={item}
+                      readOnly={readOnly}
+                      onLineReview={onLineReview}
+                      onLineOverride={onLineOverride}
+                      overrideLineId={overrideLineId}
+                      overrideDrafts={overrideDrafts}
+                      onStartOverride={handleStartOverride}
+                      onCancelOverride={handleCancelOverride}
+                      onOverrideDraftChange={handleOverrideDraftChange}
+                      onSaveOverride={handleSaveOverride}
+                      onDocumentAction={onDocumentAction}
+                    />
+                  </div>
                 </div>
               </TabsContent>
 
               <TabsContent value="reconciliation">
-                <ReconciliationTab
-                  item={item}
-                  readOnly={readOnly}
-                  onLineReview={onLineReview}
-                  onLineOverride={onLineOverride}
-                  overrideLineId={overrideLineId}
-                  overrideDrafts={overrideDrafts}
-                  onStartOverride={handleStartOverride}
-                  onCancelOverride={handleCancelOverride}
-                  onOverrideDraftChange={handleOverrideDraftChange}
-                  onSaveOverride={handleSaveOverride}
-                  onDocumentAction={onDocumentAction}
-                />
+                <OverviewCard title="Shipment details" fields={getSystemShipmentFields(item)} />
               </TabsContent>
 
               <TabsContent value="exceptions">

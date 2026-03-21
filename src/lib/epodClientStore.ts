@@ -99,7 +99,7 @@ export function applyLocalWorkflowAction(input: {
   itemId: string;
   actor: string;
   actionType: 'document' | 'line-review' | 'line-override' | 'exception-resolve' | 'ocr-update';
-  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection';
+  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection' | 'markPendingApproval';
   lineId?: string;
   reviewAction?: 'ACCEPTED' | 'REJECTED';
   overridePatch?: LineOverridePatch;
@@ -138,8 +138,6 @@ export function applyLocalWorkflowAction(input: {
           return appendAudit(
             {
               ...item,
-              statusLabel: 'Matched',
-              statusVariant: 'success',
               reason:
                 input.documentAction === 'approve'
                   ? 'Approved by reviewer'
@@ -173,10 +171,8 @@ export function applyLocalWorkflowAction(input: {
           return appendAudit(
             {
               ...item,
-              statusLabel: 'Skipped',
-              statusVariant: 'danger',
               reason: input.documentAction === 'approveRejection' ? 'ePOD rejected after reconciliation review' : 'Rejected during processing review',
-              finalMatchStatus: 'skipped',
+              finalMatchStatus: item.finalMatchStatus,
               deliveryReviewStatus: 'unclean',
               finalDocumentDecision: 'rejected',
             },
@@ -199,16 +195,23 @@ export function applyLocalWorkflowAction(input: {
             input.actor,
             'Document marked for manual review',
           );
+        case 'markPendingApproval':
+          return appendAudit(
+            {
+              ...item,
+              finalDocumentDecision: 'pending_approval',
+            },
+            input.actor,
+            'Document submitted for pending approval without final delivery decision',
+          );
         case 'sendToReviewer':
           return appendAudit(
             {
               ...item,
-              statusLabel: 'Matched',
-              statusVariant: 'success',
               reason: 'Resolved manually and sent to reviewer',
               manuallyMatched: true,
               finalMatchStatus: 'manually_matched',
-              deliveryReviewStatus: deliveryReviewStatus ?? 'clean',
+              deliveryReviewStatus: item.deliveryReviewStatus ?? null,
               finalDocumentDecision: item.finalDocumentDecision ?? null,
             },
             input.actor,
@@ -226,9 +229,6 @@ export function applyLocalWorkflowAction(input: {
           ),
           manuallyMatched: true,
           finalMatchStatus: 'manually_matched',
-          statusLabel: 'Needs Review',
-          statusVariant: 'warning',
-          reason: input.reviewAction === 'REJECTED' ? 'One or more line items were rejected during review' : 'Line item accepted during review',
           finalDocumentDecision: null,
         },
         input.actor,
@@ -263,9 +263,6 @@ export function applyLocalWorkflowAction(input: {
           ),
           manuallyMatched: true,
           finalMatchStatus: 'manually_matched',
-          statusLabel: 'Needs Review',
-          statusVariant: 'warning',
-          reason: 'Line item overridden during review',
           finalDocumentDecision: null,
         },
         input.actor,

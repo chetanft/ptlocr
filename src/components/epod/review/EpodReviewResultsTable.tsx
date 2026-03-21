@@ -119,6 +119,21 @@ export function EpodReviewResultsTable({
   };
 
   const getEpodStatusLabel = (item: ProcessedItem) => {
+    const allLineItemsDecided =
+      item.lineItems.length > 0 && item.lineItems.every((line) => line.reviewAction && line.reviewAction !== 'PENDING');
+
+    if (
+      item.reason === 'Marked for manual review' ||
+      item.reason === 'Resolved manually and sent to reviewer'
+    ) {
+      return 'Raised for review';
+    }
+    if (allLineItemsDecided && item.finalDocumentDecision == null) {
+      return 'Pending Approval';
+    }
+    if (item.finalDocumentDecision === 'pending_approval') {
+      return 'Pending Approval';
+    }
     if (item.finalDocumentDecision === 'clean' || item.deliveryReviewStatus === 'clean') {
       return 'Clean';
     }
@@ -128,17 +143,12 @@ export function EpodReviewResultsTable({
     if (item.finalDocumentDecision === 'rejected') {
       return 'Rejected';
     }
-    if (
-      item.reason === 'Marked for manual review' ||
-      item.reason === 'Resolved manually and sent to reviewer'
-    ) {
-      return 'Raised for review';
-    }
     return '—';
   };
 
   const getEpodStatusVariant = (item: ProcessedItem) => {
     const label = getEpodStatusLabel(item);
+    if (label === 'Pending Approval') return 'secondary' as const;
     if (label === 'Clean') return 'success' as const;
     if (label === 'Unclean') return 'warning' as const;
     if (label === 'Rejected') return 'danger' as const;

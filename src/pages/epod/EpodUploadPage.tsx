@@ -341,12 +341,27 @@ export default function EpodUploadPage() {
     }
 
     completedSubmissionJobsRef.current.add(submissionJob.jobId);
+    const submittedWorkflowItems = submissionJob.items
+      .filter((jobItem) => jobItem.status === 'Submitted')
+      .map((jobItem) => workingItems.find((item) => item.id === jobItem.id))
+      .filter((item): item is ProcessedItem => Boolean(item));
+
     markShipmentsApproved(
-      submissionJob.items
-        .filter((item) => item.status === 'Submitted')
+      submittedWorkflowItems
+        .filter((item) => item.finalDocumentDecision === 'clean' || item.finalDocumentDecision === 'unclean')
         .map((item) => item.awbNumber),
     );
-  }, [submissionJob, submissionState]);
+    markShipmentsPendingApproval(
+      submittedWorkflowItems
+        .filter((item) => item.finalDocumentDecision === 'pending_approval' || item.finalDocumentDecision == null)
+        .map((item) => item.awbNumber),
+    );
+    markShipmentsRejected(
+      submittedWorkflowItems
+        .filter((item) => item.finalDocumentDecision === 'rejected')
+        .map((item) => item.awbNumber),
+    );
+  }, [submissionJob, submissionState, workingItems]);
 
   const handleFilesSelected = (selectedFiles: FileList) => {
     const nextFiles = Array.from(selectedFiles).map(createUploadFile);
@@ -416,11 +431,37 @@ export default function EpodUploadPage() {
 
     try {
       setWorkflowError(null);
-      const itemIds = reviewItems
+      let nextBatchId = workflowBatchId;
+      let nextItems = workingItems;
+      const undecidedItems = reviewItems.filter((item) => item.finalDocumentDecision == null);
+
+      for (const item of undecidedItems) {
+        const workflow = await applyEpodWorkflowAction({
+          batchId: nextBatchId,
+          itemId: item.id,
+          actor,
+          actionType: 'document',
+          documentAction: 'markPendingApproval',
+        });
+        nextBatchId = workflow.batchId;
+        nextItems = workflow.items;
+      }
+
+      if (undecidedItems.length > 0) {
+        setWorkingItems(nextItems);
+        setWorkflowBatchId(nextBatchId);
+        markShipmentsPendingApproval(undecidedItems.map((item) => item.awbNumber));
+      }
+
+      const effectiveReviewItems =
+        undecidedItems.length > 0
+          ? nextItems.filter((item) => item.statusLabel !== 'Unmapped' && item.finalDocumentDecision !== 'rejected')
+          : reviewItems;
+      const itemIds = effectiveReviewItems
         .filter((item) => getReviewFinalMatchStatus(item) !== 'skipped')
         .map((item) => item.id);
       const job = await createEpodSubmissionJob({
-        batchId: workflowBatchId,
+        batchId: nextBatchId,
         actor,
         itemIds,
       });
@@ -457,14 +498,6 @@ export default function EpodUploadPage() {
       });
       setWorkingItems(workflow.items);
       setWorkflowBatchId(workflow.batchId);
-      const updatedItem = workflow.items.find((item) => item.id === selectedProcessItemId);
-      if (updatedItem?.awbNumber) {
-        if (action === 'approveClean' || action === 'approveUnclean') {
-          markShipmentsPendingApproval([updatedItem.awbNumber]);
-        } else if (action === 'approveRejection') {
-          markShipmentsRejected([updatedItem.awbNumber]);
-        }
-      }
     } catch (error: unknown) {
       setWorkflowError(error instanceof Error ? error.message : 'Failed to update workflow');
     }

@@ -128,7 +128,7 @@ export interface ProcessedItem {
   receivedQty?: number | null;
   difference?: number | null;
   deliveryReviewStatus?: 'clean' | 'unclean' | null;
-  finalDocumentDecision?: 'clean' | 'unclean' | 'rejected' | null;
+  finalDocumentDecision?: 'clean' | 'unclean' | 'rejected' | 'pending_approval' | null;
   systemData: ProcessedSystemData;
   ocrData: ProcessedOcrData;
   lineItems: ProcessedLineItem[];
@@ -322,7 +322,7 @@ export async function applyEpodWorkflowAction(input: {
   itemId: string;
   actor: string;
   actionType: 'document' | 'line-review' | 'line-override' | 'exception-resolve' | 'ocr-update';
-  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection';
+  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection' | 'markPendingApproval';
   lineId?: string;
   reviewAction?: 'ACCEPTED' | 'REJECTED';
   overridePatch?: LineOverridePatch;

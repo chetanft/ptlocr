@@ -1,6 +1,6 @@
 import type { ChangeEvent, DragEvent } from 'react';
 
-import { Icon, Typography } from 'ft-design-system';
+import { Button, Icon, Typography } from 'ft-design-system';
 
 import { rem14 } from '@/lib/rem';
 
@@ -49,7 +49,18 @@ export function EpodUploadDropzone({
       </div>
       <Typography variant="body-primary-semibold" color="primary">
         Click or Drag and drop file here to upload or{' '}
-        <span className="text-text-brand">Choose files</span>
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            document.getElementById(inputId)?.click();
+          }}
+          style={{ display: 'inline-flex', padding: 0, height: 'auto', minWidth: 0, verticalAlign: 'baseline' }}
+        >
+          Choose files
+        </Button>
       </Typography>
       <Typography variant="body-secondary" color="secondary">
         Allowed file type: image/* &amp; .pdf | Max Size: 10 mb
