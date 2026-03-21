@@ -217,7 +217,11 @@ export function EpodProcessDetailDrawer({
   }
 
   const comparisonRows = getDrawerComparisonRows(item, draft);
-  const reconciliationBadgeStatuses = Array.from(new Set(item.lineItems.map((line) => line.reconStatus)));
+  const lineStatuses = Array.from(new Set(item.lineItems.map((line) => line.reconStatus)));
+  const reconciliationBadgeStatuses =
+    lineStatuses.length > 0 && lineStatuses.every((status) => status === 'MATCH')
+      ? ['MATCH' as const]
+      : lineStatuses.filter((status) => status !== 'MATCH');
 
   const updateDraft = (next: Partial<typeof draft>) => {
     setDraft((current) => (current ? { ...current, ...next } : current));

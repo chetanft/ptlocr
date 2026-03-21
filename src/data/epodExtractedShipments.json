@@ -51,7 +51,7 @@
     ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": -5
+    "sortOrder": 2
   },
   {
     "awbNumber": "4927572",
@@ -109,9 +109,39 @@
     "destination": "Pune",
     "deliveredDate": "2025-01-13",
     "packageCount": 6,
+    "lineItems": [
+      {
+        "sku": "1000267",
+        "description": "1000267",
+        "sentQty": 2,
+        "receivedQty": 2,
+        "damagedQty": 0
+      },
+      {
+        "sku": "1000268",
+        "description": "1000268",
+        "sentQty": 2,
+        "receivedQty": 2,
+        "damagedQty": 0
+      },
+      {
+        "sku": "1000269",
+        "description": "1000269",
+        "sentQty": 1,
+        "receivedQty": 1,
+        "damagedQty": 0
+      },
+      {
+        "sku": "1000270",
+        "description": "1000270",
+        "sentQty": 1,
+        "receivedQty": 1,
+        "damagedQty": 0
+      }
+    ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": 4
+    "sortOrder": -6
   },
   {
     "awbNumber": "4927575",
@@ -172,7 +202,7 @@
     ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": -3
+    "sortOrder": -5
   },
   {
     "awbNumber": "4927583",
@@ -241,7 +271,7 @@
     ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": -2
+    "sortOrder": -3
   },
   {
     "awbNumber": "4927593",
