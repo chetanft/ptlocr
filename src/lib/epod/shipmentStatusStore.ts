@@ -78,3 +78,14 @@ export function markShipmentsApproved(awbs: Array<string | null | undefined>) {
   }
   setShipmentStatusOverrides(next);
 }
+
+export function resetShipmentStatusOverrides() {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  cachedRawStatusOverrides = null;
+  cachedStatusOverrides = EMPTY_STATUS_OVERRIDES;
+  window.localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent(EVENT_NAME));
+}

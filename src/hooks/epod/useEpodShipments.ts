@@ -17,6 +17,7 @@ interface ExtractedShipmentRecord {
   destination: string | null;
   deliveredDate: string | null;
   packageCount: number;
+  lineItems?: EpodShipmentRow['lineItems'];
   sortOrder: number;
 }
 
@@ -50,6 +51,7 @@ function toShipmentRow(record: ExtractedShipmentRecord, index: number, total: nu
     destination: record.destination || '—',
     transporter: record.transporter,
     packageCount: record.packageCount || 0,
+    lineItems: record.lineItems,
     deliveredDate: toDisplayDate(record.deliveredDate),
     uploadedAt,
     status: statusOverride ?? getStatusForIndex(index, total),

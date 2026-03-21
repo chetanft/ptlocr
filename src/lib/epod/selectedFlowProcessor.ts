@@ -83,6 +83,15 @@ function partialText(value: string | null | undefined, keepWords = 1): string | 
   return words.slice(0, Math.max(1, keepWords)).join(' ');
 }
 
+function toNullableString(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const text = String(value).trim();
+  return text === '' ? null : text;
+}
+
 function buildRecordMaps() {
   const byFileName = new Map<string, EpodExtractedPodRecord>();
   const byAwb = new Map<string, EpodExtractedPodRecord>();
@@ -155,6 +164,24 @@ function resolveReviewPreset(record: EpodExtractedPodRecord, index: number): Rev
   }
 }
 
+function hasSeededReconciliationData(shipment: EpodSelectedShipment): boolean {
+  return Boolean(shipment.lineItems && shipment.lineItems.length > 0);
+}
+
+function resolveAppliedPreset(
+  shipment: EpodSelectedShipment,
+  record: EpodExtractedPodRecord,
+  index: number,
+): ReviewPreset {
+  // When seeded shipment data already defines the comparison scenario,
+  // keep the extracted values intact and let the seeded data drive the outcome.
+  if (hasSeededReconciliationData(shipment)) {
+    return { variant: 'clean' };
+  }
+
+  return resolveReviewPreset(record, index);
+}
+
 function applyReviewPreset(
   extracted: EpodExtractedPodData,
   preset: ReviewPreset,
@@ -172,6 +199,34 @@ function applyReviewPreset(
   packages: number | null;
   invoiceNumber: string | null;
   invoiceValue: number | null;
+  carrier: string | null;
+  documentType: string | null;
+  bookingBranch: string | null;
+  pickupDate: string | null;
+  shipDate: string | null;
+  consignor: string | null;
+  consignorAddress: string | null;
+  consignorPhone: string | null;
+  consignorPin: string | null;
+  consignorGst: string | null;
+  consigneeAddress: string | null;
+  consigneePhone: string | null;
+  consigneePin: string | null;
+  consigneeGst: string | null;
+  pinCode: string | null;
+  packageWeight: string | number | null;
+  invoiceCount: number | null;
+  invoiceNumbers: string | null;
+  freightAmount: string | null;
+  freightMode: string | null;
+  paymentMode: string | null;
+  ewaybillNumber: string | null;
+  dimensions: string | null;
+  receiverStamp: string | null;
+  receiverName: string | null;
+  receiverPhone: string | null;
+  vehicleNumber: string | null;
+  podCopyType: string | null;
   rawFields: Record<string, unknown>;
   reviewVariant: EpodSelectedFlowReviewVariant;
 } {
@@ -180,7 +235,7 @@ function applyReviewPreset(
   let extractedConsignee = extracted.consignee_name ?? null;
   let extractedDeliveryDate = extracted.delivery_date ?? null;
   let extractedFrom = extracted.consignor_name ?? null;
-  let extractedTo = extracted.consignee_name ?? extracted.to_city ?? null;
+  let extractedTo = extracted.to_city ?? extracted.consignee_name ?? null;
   let stampPresent = extracted.stamp_present;
   let signaturePresent = extracted.signature_present;
   let packages = extracted.no_of_packages ?? null;
@@ -188,6 +243,34 @@ function applyReviewPreset(
   let invoiceValue = extracted.invoice_value ?? null;
   let remarks = extracted.remarks ?? null;
   let conditionNotes = extracted.condition_notes ?? null;
+  const carrier = extracted.transporter_name ?? null;
+  const documentType = extracted.pod_copy_type ?? null;
+  const bookingBranch = extracted.booking_branch ?? null;
+  const pickupDate = extracted.booking_date ?? null;
+  const shipDate = null;
+  const consignor = extracted.consignor_name ?? null;
+  const consignorAddress = extracted.consignor_address ?? null;
+  const consignorPhone = extracted.consignor_phone ?? null;
+  const consignorPin = extracted.consignor_pin ?? null;
+  const consignorGst = extracted.gst_number_consignor ?? null;
+  const consigneeAddress = extracted.consignee_address ?? null;
+  const consigneePhone = extracted.consignee_phone ?? null;
+  const consigneePin = extracted.consignee_pin ?? null;
+  const consigneeGst = extracted.gst_number_consignee ?? null;
+  const pinCode = extracted.consignee_pin ?? null;
+  const packageWeight = extracted.weight_kg ?? null;
+  const invoiceCount = extracted.number_of_invoices ?? null;
+  const invoiceNumbers = extracted.invoice_number ?? null;
+  const freightAmount = null;
+  const freightMode = extracted.freight_mode ?? null;
+  const paymentMode = extracted.payment_mode ?? null;
+  const ewaybillNumber = null;
+  const dimensions = null;
+  const receiverStamp = null;
+  const receiverName = extracted.receiver_name ?? null;
+  const receiverPhone = extracted.consignee_phone ?? null;
+  const vehicleNumber = extracted.vehicle_number ?? null;
+  const podCopyType = extracted.pod_copy_type ?? null;
 
   switch (preset.variant) {
     case 'stamp_missing':
@@ -246,6 +329,34 @@ function applyReviewPreset(
     packages,
     invoiceNumber,
     invoiceValue,
+    carrier,
+    documentType,
+    bookingBranch,
+    pickupDate,
+    shipDate,
+    consignor,
+    consignorAddress,
+    consignorPhone,
+    consignorPin,
+    consignorGst,
+    consigneeAddress,
+    consigneePhone,
+    consigneePin,
+    consigneeGst,
+    pinCode,
+    packageWeight,
+    invoiceCount,
+    invoiceNumbers,
+    freightAmount,
+    freightMode,
+    paymentMode,
+    ewaybillNumber,
+    dimensions,
+    receiverStamp,
+    receiverName,
+    receiverPhone,
+    vehicleNumber,
+    podCopyType,
     reviewVariant,
     rawFields: {
       ...extracted,
@@ -348,6 +459,36 @@ function buildLineItems(
   shipment: EpodSelectedShipment,
   extracted: ReturnType<typeof applyReviewPreset>,
 ): ProcessedLineItem[] {
+  if (shipment.lineItems && shipment.lineItems.length > 0) {
+    return shipment.lineItems.map((line, index) => {
+      const receivedQty = line.receivedQty ?? line.sentQty;
+      const damagedQty = line.damagedQty ?? 0;
+      const difference = receivedQty - line.sentQty;
+
+      let reconStatus: ProcessedLineItem['reconStatus'] = 'MATCH';
+      if (damagedQty > 0) {
+        reconStatus = 'DAMAGED';
+      } else if (difference < 0) {
+        reconStatus = 'SHORT';
+      } else if (difference > 0) {
+        reconStatus = 'EXCESS';
+      }
+
+      return {
+        id: `${shipment.awbNumber}-line-${index + 1}`,
+        sku: line.sku,
+        description: line.description,
+        sentQty: line.sentQty,
+        receivedQty,
+        damagedQty,
+        difference,
+        reconStatus,
+        reviewAction: reconStatus === 'MATCH' ? 'ACCEPTED' : undefined,
+        note: reconStatus === 'MATCH' ? null : 'Line item quantities need to be verified against the uploaded POD image',
+      };
+    });
+  }
+
   const sentQty = shipment.packageCount ?? extracted.packages ?? 0;
   const receivedQty = extracted.packages ?? sentQty;
   const damagedQty = (extracted.remarks ?? extracted.conditionNotes ?? '').toLowerCase().match(/damag|broken|leak/i) ? 1 : 0;
@@ -511,6 +652,15 @@ function buildMatchedItem(
   }
 
   const lineItems = buildLineItems(shipment, extracted);
+  if (lineItems.some((line) => line.reconStatus === 'SHORT') && !discrepancyReasons.some((reason) => reason.toLowerCase().includes('package count mismatch') || reason.toLowerCase().includes('short'))) {
+    discrepancyReasons.push('Line-item reconciliation detected short delivery');
+  }
+  if (lineItems.some((line) => line.reconStatus === 'EXCESS') && !discrepancyReasons.some((reason) => reason.toLowerCase().includes('excess'))) {
+    discrepancyReasons.push('Line-item reconciliation detected excess quantity');
+  }
+  if (lineItems.some((line) => line.reconStatus === 'DAMAGED') && !discrepancyReasons.some((reason) => reason.toLowerCase().includes('damage'))) {
+    discrepancyReasons.push('Line-item reconciliation detected damaged material');
+  }
   const hasIssues = discrepancyReasons.length > 0;
   const statusLabel: ProcessedItem['statusLabel'] = hasIssues ? 'Needs Review' : 'Matched';
   const statusVariant: ProcessedItem['statusVariant'] = hasIssues ? 'warning' : 'success';
@@ -532,6 +682,35 @@ function buildMatchedItem(
     conditionNotes: extracted.conditionNotes,
     description: extracted.description,
     packages: extracted.packages,
+    carrier: toNullableString(extracted.carrier),
+    documentType: toNullableString(extracted.documentType),
+    bookingBranch: toNullableString(extracted.bookingBranch),
+    pickupDate: toNullableString(extracted.pickupDate),
+    shipDate: toNullableString(extracted.shipDate),
+    consignor: toNullableString(extracted.consignor),
+    consignorAddress: toNullableString(extracted.consignorAddress),
+    consignorPhone: toNullableString(extracted.consignorPhone),
+    consignorPin: toNullableString(extracted.consignorPin),
+    consignorGst: toNullableString(extracted.consignorGst),
+    consigneeAddress: toNullableString(extracted.consigneeAddress),
+    consigneePhone: toNullableString(extracted.consigneePhone),
+    consigneePin: toNullableString(extracted.consigneePin),
+    consigneeGst: toNullableString(extracted.consigneeGst),
+    pinCode: toNullableString(extracted.pinCode),
+    packageWeight: extracted.packageWeight,
+    invoiceValue: extracted.invoiceValue,
+    invoiceCount: extracted.invoiceCount,
+    invoiceNumbers: toNullableString(extracted.invoiceNumbers),
+    freightAmount: toNullableString(extracted.freightAmount),
+    freightMode: toNullableString(extracted.freightMode),
+    paymentMode: toNullableString(extracted.paymentMode),
+    ewaybillNumber: toNullableString(extracted.ewaybillNumber),
+    dimensions: toNullableString(extracted.dimensions),
+    receiverStamp: toNullableString(extracted.receiverStamp),
+    receiverName: toNullableString(extracted.receiverName),
+    receiverPhone: toNullableString(extracted.receiverPhone),
+    vehicleNumber: toNullableString(extracted.vehicleNumber),
+    podCopyType: toNullableString(extracted.podCopyType),
     rawFields: {
       ...extracted.rawFields,
       processing_mode: 'selection',
@@ -617,29 +796,30 @@ function buildMatchedItem(
   };
 }
 
-function buildUnmappedItem(file: File, actor: string, reason: string): SelectedFlowProcessedItem {
+function buildUnmappedItem(file: File, actor: string, reason: string, reportRecord?: EpodExtractedPodRecord | null): SelectedFlowProcessedItem {
   const timestamp = new Date().toISOString();
   const reviewStatus: EpodDeliveryReviewStatus = null;
+  const ext = reportRecord?.extractedData;
   return {
     id: `selection-unmapped-${file.name}`,
     processingMode: 'selection',
     bucket: 'unmapped',
     fileName: file.name,
-    awbNumber: null,
+    awbNumber: ext?.awb_number ?? null,
     shipmentId: null,
-    fromName: null,
+    fromName: ext?.consignor_name ?? null,
     fromSubtext: null,
-    toName: null,
-    toSubtext: null,
-    transporter: null,
+    toName: ext?.consignee_name ?? null,
+    toSubtext: ext?.to_city ?? null,
+    transporter: ext?.transporter_name ?? reportRecord?.transporter ?? null,
     statusLabel: 'Unmapped',
     statusVariant: 'danger',
     reason,
     confidence: 0.25,
     confidenceLabel: 'Low',
-    stampPresent: false,
-    signaturePresent: false,
-    invoiceNumberExtracted: null,
+    stampPresent: ext?.stamp_present ?? false,
+    signaturePresent: ext?.signature_present ?? false,
+    invoiceNumberExtracted: ext?.invoice_number ?? null,
     invoiceNumberSystem: null,
     sentQty: null,
     receivedQty: null,
@@ -657,23 +837,52 @@ function buildUnmappedItem(file: File, actor: string, reason: string): SelectedF
       packages: null,
     },
     ocrData: {
-      extractedAwb: null,
-      extractedConsignee: null,
-      extractedDeliveryDate: null,
-      extractedFrom: null,
-      extractedTo: null,
-      stampPresent: false,
-      signaturePresent: false,
-      remarks: null,
-      conditionNotes: null,
-      description: null,
-      packages: null,
+      extractedAwb: ext?.awb_number ?? null,
+      extractedConsignee: ext?.consignee_name ?? null,
+      extractedDeliveryDate: ext?.delivery_date ?? ext?.booking_date ?? null,
+      extractedFrom: ext?.consignor_name ?? null,
+      extractedTo: ext?.to_city ?? null,
+      stampPresent: ext?.stamp_present ?? false,
+      signaturePresent: ext?.signature_present ?? false,
+      remarks: ext?.remarks ?? null,
+      conditionNotes: ext?.condition_notes ?? null,
+      description: ext?.description ?? null,
+      packages: ext?.no_of_packages != null ? Number(ext.no_of_packages) : null,
+      carrier: ext?.transporter_name ?? null,
+      documentType: null,
+      bookingBranch: null,
+      pickupDate: ext?.booking_date ?? null,
+      shipDate: null,
+      consignor: ext?.consignor_name ?? null,
+      consignorAddress: ext?.consignor_address ?? null,
+      consignorPhone: ext?.consignor_phone ?? null,
+      consignorPin: ext?.consignor_pin ?? null,
+      consignorGst: ext?.gst_number_consignor ?? null,
+      consigneeAddress: ext?.consignee_address ?? null,
+      consigneePhone: ext?.consignee_phone ?? null,
+      consigneePin: ext?.consignee_pin ?? null,
+      consigneeGst: ext?.gst_number_consignee ?? null,
+      pinCode: null,
+      packageWeight: ext?.weight_kg != null ? String(ext.weight_kg) : null,
+      invoiceValue: ext?.invoice_value ?? null,
+      invoiceCount: null,
+      invoiceNumbers: ext?.invoice_number ?? null,
+      freightAmount: null,
+      freightMode: ext?.freight_mode ?? null,
+      paymentMode: ext?.payment_mode ?? null,
+      ewaybillNumber: null,
+      dimensions: null,
+      receiverStamp: null,
+      receiverName: ext?.receiver_name ?? null,
+      receiverPhone: null,
+      vehicleNumber: ext?.vehicle_number ?? null,
+      podCopyType: ext?.pod_copy_type ?? null,
       rawFields: {
         processing_mode: 'selection',
         delivery_review_status: reviewStatus,
         review_reasons: ['UNMATCHED_POD'],
         file_name: file.name,
-        document_backed: false,
+        document_backed: !!ext,
       },
       deliveryReviewStatus: reviewStatus,
     },
@@ -780,6 +989,35 @@ function buildSkippedItem(shipment: EpodSelectedShipment, actor: string): Select
       conditionNotes: null,
       description: null,
       packages: null,
+      carrier: shipment.transporter,
+      documentType: null,
+      bookingBranch: null,
+      pickupDate: null,
+      shipDate: null,
+      consignor: shipment.origin,
+      consignorAddress: null,
+      consignorPhone: null,
+      consignorPin: null,
+      consignorGst: null,
+      consigneeAddress: null,
+      consigneePhone: null,
+      consigneePin: null,
+      consigneeGst: null,
+      pinCode: null,
+      packageWeight: null,
+      invoiceValue: null,
+      invoiceCount: null,
+      invoiceNumbers: null,
+      freightAmount: null,
+      freightMode: null,
+      paymentMode: null,
+      ewaybillNumber: null,
+      dimensions: null,
+      receiverStamp: null,
+      receiverName: null,
+      receiverPhone: null,
+      vehicleNumber: null,
+      podCopyType: null,
       rawFields: {
         processing_mode: 'selection',
         delivery_review_status: reviewStatus,
@@ -916,13 +1154,13 @@ export async function processSelectedAwbFlow(input: SelectedFlowInput): Promise<
 
     const awb = normalizeAwb(reportRecord.extractedData.awb_number);
     if (!awb) {
-      items.push(buildUnmappedItem(file, actor, 'AWB could not be extracted from stored data'));
+      items.push(buildUnmappedItem(file, actor, 'AWB could not be extracted from stored data', reportRecord));
       continue;
     }
 
     const shipment = selectedMap.get(awb);
     if (!shipment) {
-      items.push(buildUnmappedItem(file, actor, `AWB ${awb} is not in the selected shipment scope`));
+      items.push(buildUnmappedItem(file, actor, `AWB ${awb} is not in the selected shipment scope`, reportRecord));
       continue;
     }
 
@@ -930,7 +1168,7 @@ export async function processSelectedAwbFlow(input: SelectedFlowInput): Promise<
 
     if (!alreadyMapped) {
       uploadedByAwb.set(awb, { file, record: reportRecord });
-      const preset = resolveReviewPreset(reportRecord, items.length);
+      const preset = resolveAppliedPreset(shipment, reportRecord, items.length);
       items.push(buildMatchedItem(file, reportRecord, shipment, actor, preset, false));
       continue;
     }

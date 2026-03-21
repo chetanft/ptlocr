@@ -38,12 +38,44 @@ export interface ProcessedSystemData {
   packages: number | null;
 }
 
+export type ProcessedFieldValue = string | number | null;
+
 export interface ProcessedOcrData {
   extractedAwb: string | null;
   extractedConsignee: string | null;
   extractedDeliveryDate: string | null;
   extractedFrom: string | null;
   extractedTo: string | null;
+  receivedQuantityNotes?: string | null;
+  carrier?: ProcessedFieldValue;
+  documentType?: ProcessedFieldValue;
+  bookingBranch?: ProcessedFieldValue;
+  pickupDate?: ProcessedFieldValue;
+  shipDate?: ProcessedFieldValue;
+  consignor?: ProcessedFieldValue;
+  consignorAddress?: ProcessedFieldValue;
+  consignorPhone?: ProcessedFieldValue;
+  consignorPin?: ProcessedFieldValue;
+  consignorGst?: ProcessedFieldValue;
+  consigneeAddress?: ProcessedFieldValue;
+  consigneePhone?: ProcessedFieldValue;
+  consigneePin?: ProcessedFieldValue;
+  consigneeGst?: ProcessedFieldValue;
+  pinCode?: ProcessedFieldValue;
+  packageWeight?: ProcessedFieldValue;
+  invoiceValue?: ProcessedFieldValue;
+  invoiceCount?: ProcessedFieldValue;
+  invoiceNumbers?: ProcessedFieldValue;
+  freightAmount?: ProcessedFieldValue;
+  freightMode?: ProcessedFieldValue;
+  paymentMode?: ProcessedFieldValue;
+  ewaybillNumber?: ProcessedFieldValue;
+  dimensions?: ProcessedFieldValue;
+  receiverStamp?: ProcessedFieldValue;
+  receiverName?: ProcessedFieldValue;
+  receiverPhone?: ProcessedFieldValue;
+  vehicleNumber?: ProcessedFieldValue;
+  podCopyType?: ProcessedFieldValue;
   stampPresent: boolean;
   signaturePresent: boolean;
   remarks: string | null;
@@ -59,6 +91,8 @@ export interface ProcessedOcrPatch {
   extractedDeliveryDate?: string | null;
   extractedFrom?: string | null;
   extractedTo?: string | null;
+  description?: string | null;
+  receivedQuantityNotes?: string | null;
   stampPresent?: boolean;
   signaturePresent?: boolean;
   remarks?: string | null;

@@ -40,9 +40,18 @@
     "destination": "Thane",
     "deliveredDate": "2025-01-09",
     "packageCount": 1,
+    "lineItems": [
+      {
+        "sku": "9000226",
+        "description": "9000226",
+        "sentQty": 1,
+        "receivedQty": 1,
+        "damagedQty": 0
+      }
+    ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": 2
+    "sortOrder": -5
   },
   {
     "awbNumber": "4927572",
@@ -53,11 +62,41 @@
     "originCity": "Pune, Maharashtra",
     "consigneeName": "Hardwyn Service",
     "destination": "Thane",
-    "deliveredDate": "2025-01-13",
-    "packageCount": 3,
+    "deliveredDate": "2025-11-19",
+    "packageCount": 4,
+    "lineItems": [
+      {
+        "sku": "3000317",
+        "description": "3000317",
+        "sentQty": 1,
+        "receivedQty": 1,
+        "damagedQty": 0
+      },
+      {
+        "sku": "3000318",
+        "description": "3000318",
+        "sentQty": 1,
+        "receivedQty": 0,
+        "damagedQty": 0
+      },
+      {
+        "sku": "3000319",
+        "description": "3000319",
+        "sentQty": 1,
+        "receivedQty": 2,
+        "damagedQty": 0
+      },
+      {
+        "sku": "3000320",
+        "description": "3000320",
+        "sentQty": 1,
+        "receivedQty": 1,
+        "damagedQty": 1
+      }
+    ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": 3
+    "sortOrder": -4
   },
   {
     "awbNumber": "4927574",
@@ -115,9 +154,25 @@
     "destination": "Nashik",
     "deliveredDate": "2025-01-11",
     "packageCount": 4,
+    "lineItems": [
+      {
+        "sku": "3000280",
+        "description": "3000280",
+        "sentQty": 2,
+        "receivedQty": 2,
+        "damagedQty": 0
+      },
+      {
+        "sku": "1000248",
+        "description": "1000248",
+        "sentQty": 2,
+        "receivedQty": 2,
+        "damagedQty": 0
+      }
+    ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": 7
+    "sortOrder": -3
   },
   {
     "awbNumber": "4927583",
@@ -175,9 +230,18 @@
     "destination": "Pune",
     "deliveredDate": "2025-01-11",
     "packageCount": 3,
+    "lineItems": [
+      {
+        "sku": "1000237",
+        "description": "1000237",
+        "sentQty": 3,
+        "receivedQty": 3,
+        "damagedQty": 0
+      }
+    ],
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": 11
+    "sortOrder": -2
   },
   {
     "awbNumber": "4927593",
@@ -507,7 +571,7 @@
     "packageCount": 2,
     "ocrSource": "report",
     "extractedTextSnippet": null,
-    "sortOrder": 33
+    "sortOrder": -1
   },
   {
     "awbNumber": "1038782",

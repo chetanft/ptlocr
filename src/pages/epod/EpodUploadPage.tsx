@@ -724,7 +724,9 @@ export default function EpodUploadPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href={epodListPath}>ePOD</BreadcrumbLink>
+              <BreadcrumbLink href={epodListPath} className="font-semibold">
+                ePOD
+              </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>

@@ -1,6 +1,19 @@
 import { extractFieldsFromFile } from './openaiOcr.js';
 import { findShipmentByAwb, normalizeAwb } from './shipmentMaster.js';
 
+function normalizeField(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim();
+    return text === '' ? null : text;
+  }
+
+  return value;
+}
+
 function classifyItem(extracted, confidence, matchedShipment, selectedAwbs, _fileName) {
   const extractedAwb = extracted.awb_number;
 
@@ -241,6 +254,35 @@ export async function processEpodBatch(files, selectedAwbs, apiKey, provider = '
       extractedDeliveryDate: ocrFields.delivery_date,
       extractedFrom: ocrFields.consignor_name ?? ocrFields.from_city,
       extractedTo: ocrFields.consignee_name ?? ocrFields.to_city,
+      carrier: normalizeField(ocrFields.transporter_name),
+      documentType: normalizeField(ocrFields.pod_copy_type),
+      bookingBranch: normalizeField(ocrFields.booking_branch),
+      pickupDate: normalizeField(ocrFields.booking_date),
+      shipDate: null,
+      consignor: normalizeField(ocrFields.consignor_name),
+      consignorAddress: normalizeField(ocrFields.consignor_address),
+      consignorPhone: normalizeField(ocrFields.consignor_phone),
+      consignorPin: normalizeField(ocrFields.consignor_pin),
+      consignorGst: normalizeField(ocrFields.gst_number_consignor),
+      consigneeAddress: normalizeField(ocrFields.consignee_address),
+      consigneePhone: normalizeField(ocrFields.consignee_phone),
+      consigneePin: normalizeField(ocrFields.consignee_pin),
+      consigneeGst: normalizeField(ocrFields.gst_number_consignee),
+      pinCode: normalizeField(ocrFields.consignee_pin),
+      packageWeight: normalizeField(ocrFields.weight_kg),
+      invoiceValue: normalizeField(ocrFields.invoice_value),
+      invoiceCount: normalizeField(ocrFields.number_of_invoices),
+      invoiceNumbers: normalizeField(ocrFields.invoice_number),
+      freightAmount: normalizeField(ocrFields.freight_amount),
+      freightMode: normalizeField(ocrFields.freight_mode),
+      paymentMode: normalizeField(ocrFields.payment_mode),
+      ewaybillNumber: normalizeField(ocrFields.ewaybill_number),
+      dimensions: normalizeField(ocrFields.dimensions),
+      receiverStamp: normalizeField(ocrFields.receiver_name_stamp),
+      receiverName: normalizeField(ocrFields.receiver_name),
+      receiverPhone: normalizeField(ocrFields.receiver_phone),
+      vehicleNumber: normalizeField(ocrFields.vehicle_number),
+      podCopyType: normalizeField(ocrFields.pod_copy_type),
       stampPresent: ocrFields.stamp_present,
       signaturePresent: ocrFields.signature_present,
       remarks: ocrFields.remarks,

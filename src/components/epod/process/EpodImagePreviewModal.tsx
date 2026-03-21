@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Badge,
@@ -21,6 +21,10 @@ import {
 import type { ProcessedItem } from '@/lib/epodApi';
 import { rem14 } from '@/lib/rem';
 import { createEpodOcrDraft, type EpodOcrDraft } from './epodOcrDraft';
+import {
+  getSystemShipmentFields,
+  renderFieldValue,
+} from './epodOverviewSections';
 
 type Role = 'Transporter' | 'Ops' | 'Reviewer';
 
@@ -51,8 +55,62 @@ function clampZoom(value: number) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 }
 
-function renderValue(value: string | number | null | undefined) {
-  return value === null || value === undefined || value === '' ? '—' : String(value);
+function ReadOnlyFieldGrid({
+  fields,
+}: {
+  fields: Array<{ label: string; value: string | number | null | undefined }>;
+}) {
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {fields.map(({ label, value }) => (
+        <div key={label} className="flex flex-col gap-1">
+          <Typography variant="body-secondary-medium" color="secondary">
+            {label}
+          </Typography>
+          <Typography variant="body-secondary-regular" color="primary">
+            {renderFieldValue(value)}
+          </Typography>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  defaultOpen = false,
+  trailing,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-border-primary overflow-hidden">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 bg-bg-secondary p-4 text-left"
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        <div className="flex items-center gap-2">
+          <Typography variant="body-primary-medium" color="primary" className="text-[1.125rem] leading-7">
+            {title}
+          </Typography>
+          {trailing}
+        </div>
+        <span
+          className="text-text-secondary transition-transform duration-200"
+          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', fontSize: rem14(18) }}
+        >
+          &#9660;
+        </span>
+      </button>
+      {isOpen ? <div className="p-4">{children}</div> : null}
+    </div>
+  );
 }
 
 export function EpodImagePreviewModal({
@@ -69,16 +127,43 @@ export function EpodImagePreviewModal({
 }: EpodImagePreviewModalProps) {
   const readOnly = role === 'Transporter';
   const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
 
-  useEffect(() => {
-    if (!open) {
-      setZoom(1);
-    }
-  }, [open]);
-
-  useEffect(() => {
+  const resetView = useCallback(() => {
     setZoom(1);
-  }, [preview?.previewUrl]);
+    setRotation(0);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (!open) resetView();
+  }, [open, resetView]);
+
+  useEffect(() => {
+    resetView();
+  }, [preview?.previewUrl, resetView]);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (zoom <= 1) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: pan.x, startPanY: pan.y };
+    },
+    [zoom, pan],
+  );
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setPan({ x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy });
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
 
   const originalDraft = useMemo(() => (item ? createEpodOcrDraft(item) : null), [item]);
   const hasDraftChanges = useMemo(() => {
@@ -127,12 +212,12 @@ export function EpodImagePreviewModal({
               <Button
                 variant="secondary"
                 size="sm"
-                icon="zoom-out"
-                iconPosition="only"
                 aria-label="Zoom out"
                 onClick={() => setZoom((current) => clampZoom(current - ZOOM_STEP))}
                 disabled={!preview || zoom <= MIN_ZOOM}
-              />
+              >
+                &minus;
+              </Button>
               <div
                 className="flex items-center justify-center rounded-md border border-border-primary bg-bg-secondary"
                 style={{ minWidth: rem14(72), minHeight: rem14(36) }}
@@ -144,17 +229,26 @@ export function EpodImagePreviewModal({
               <Button
                 variant="secondary"
                 size="sm"
-                icon="zoom-in"
-                iconPosition="only"
                 aria-label="Zoom in"
                 onClick={() => setZoom((current) => clampZoom(current + ZOOM_STEP))}
                 disabled={!preview || zoom >= MAX_ZOOM}
-              />
+              >
+                +
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setZoom(1)}
-                disabled={!preview || zoom === 1}
+                aria-label="Rotate clockwise"
+                onClick={() => setRotation((r) => (r + 90) % 360)}
+                disabled={!preview}
+              >
+                &#x21BB;
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={resetView}
+                disabled={!preview || (zoom === 1 && pan.x === 0 && pan.y === 0 && rotation === 0)}
               >
                 Reset
               </Button>
@@ -170,21 +264,29 @@ export function EpodImagePreviewModal({
                 </Typography>
                 {item ? (
                   <Typography variant="body-secondary-regular" color="secondary">
-                    AWB {renderValue(item.awbNumber)}
+                    AWB {renderFieldValue(item.awbNumber)}
                   </Typography>
                 ) : null}
               </div>
               {preview?.previewUrl ? (
-                <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-primary bg-[var(--bg-secondary)] p-6">
-                  <div className="flex min-h-full min-w-full items-center justify-center">
+                <div
+                  className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border-primary bg-[var(--bg-secondary)] p-6"
+                  style={{ cursor: zoom > 1 ? 'grab' : 'default' }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                >
+                  <div className="flex min-h-full min-w-full items-center justify-center select-none">
                     <img
                       src={preview.previewUrl}
                       alt={preview.fileName}
+                      draggable={false}
                       className="h-auto w-auto max-h-[42rem] max-w-full rounded-xl object-contain shadow-sm"
                       style={{
-                        transform: `scale(${zoom})`,
+                        transform: `scale(${zoom}) rotate(${rotation}deg) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
                         transformOrigin: 'center center',
-                        transition: 'transform 120ms ease-out',
+                        transition: dragRef.current ? 'none' : 'transform 120ms ease-out',
                       }}
                     />
                   </div>
@@ -198,49 +300,19 @@ export function EpodImagePreviewModal({
               )}
             </div>
 
-            <div className="flex min-h-[28rem] w-full min-w-0 flex-col gap-4 xl:w-auto xl:min-w-[20rem] xl:max-w-[24rem] xl:shrink-0">
+            <div className="flex min-h-[28rem] w-full min-w-0 flex-col gap-4 xl:w-auto xl:min-w-[26rem] xl:max-w-[34rem] xl:shrink-0">
               {errorMessage ? <Alert variant="danger">{errorMessage}</Alert> : null}
 
               {item ? (
-                <div className="rounded-xl border border-border-primary bg-bg-secondary p-4">
-                  <Typography variant="body-primary-medium" color="primary" className="text-[1.125rem] leading-7">
-                    Shipment data in system
-                  </Typography>
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {(
-                      [
-                        ['AWB Number', item.systemData.awbNumber],
-                        ['Shipment ID', item.systemData.shipmentId],
-                        ['From', item.systemData.fromName],
-                        ['From city', item.systemData.fromSubtext],
-                        ['To', item.systemData.toName],
-                        ['To city', item.systemData.toSubtext],
-                        ['Transporter', item.systemData.transporter],
-                        ['Delivered date', item.systemData.deliveredDate],
-                      ] as const
-                    ).map(([label, value]) => (
-                      <div key={label} className="flex flex-col gap-1">
-                        <Typography variant="body-secondary-medium" color="secondary">
-                          {label}
-                        </Typography>
-                        <Typography variant="body-secondary-regular" color="primary">
-                          {renderValue(value)}
-                        </Typography>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <CollapsibleSection title="Shipment data in system">
+                  <ReadOnlyFieldGrid fields={getSystemShipmentFields(item)} />
+                </CollapsibleSection>
               ) : null}
 
-              <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-xl border border-border-primary p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <Typography variant="body-primary-medium" color="primary" className="text-[1.125rem] leading-7">
-                    OCR extracted POD data
-                  </Typography>
-                  {readOnly ? (
-                    <Badge variant="secondary">Read only</Badge>
-                  ) : null}
-                </div>
+              <CollapsibleSection
+                title="Review-editable OCR fields"
+                trailing={readOnly ? <Badge variant="secondary">Read only</Badge> : undefined}
+              >
                 {draft ? (
                   <div className="mt-4 flex flex-col gap-4">
                     <Input>
@@ -362,7 +434,7 @@ export function EpodImagePreviewModal({
                     </Typography>
                   </div>
                 )}
-              </div>
+              </CollapsibleSection>
             </div>
           </div>
         </ModalBody>

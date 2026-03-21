@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Badge,
@@ -11,22 +12,31 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
+  Input,
+  InputField,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
+  Textarea,
+  TextareaField,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
   Typography,
 } from 'ft-design-system';
-import type { ProcessedItem, ProcessedLineItem } from '@/lib/epodApi';
+import type { ProcessedItem, ProcessedLineItem, ProcessedOcrPatch } from '@/lib/epodApi';
 import { ExceptionBadge } from '@/components/pod/ExceptionBadge';
 import { rem14 } from '@/lib/rem';
 import { createEpodOcrDraft } from './epodOcrDraft';
+import {
+  getDrawerComparisonRows,
+  getSystemShipmentFields,
+  renderFieldValue,
+} from './epodOverviewSections';
 
 type Role = 'Transporter' | 'Ops' | 'Reviewer';
 
@@ -39,13 +49,10 @@ interface EpodProcessDetailDrawerProps {
   onLineReview: (lineId: string, action: 'ACCEPTED' | 'REJECTED') => void;
   onLineOverride: (lineId: string) => void;
   onResolveException: (exceptionId: string) => void;
+  onSaveOcrEdits: (ocrPatch: ProcessedOcrPatch) => Promise<void> | void;
   previewUrl?: string | null;
   canPreview?: boolean;
   onPreview?: () => void;
-}
-
-function renderValue(value: string | number | null | undefined) {
-  return value === null || value === undefined || value === '' ? '—' : String(value);
 }
 
 function ReconciliationTab({
@@ -96,8 +103,8 @@ function ReconciliationTab({
             <TableCell>{line.damagedQty}</TableCell>
             <TableCell>{line.difference}</TableCell>
             <TableCell>
-              <Badge variant={line.reconStatus === 'MATCH' ? 'success' : line.reconStatus === 'EXCESS' ? 'warning' : 'danger'}>
-                {line.reconStatus}
+              <Badge variant={RECON_STATUS_META[line.reconStatus].variant}>
+                {RECON_STATUS_META[line.reconStatus].label}
               </Badge>
             </TableCell>
             {!readOnly ? (
@@ -122,6 +129,52 @@ function ReconciliationTab({
   );
 }
 
+function OverviewCard({
+  title,
+  fields,
+}: {
+  title: string;
+  fields: Array<{ label: string; value: string | number | null | undefined }>;
+}) {
+  return (
+    <div className="flex flex-col py-1" style={{ gap: rem14(12) }}>
+      <Typography variant="body-primary-medium" color="primary" className="text-[1rem] font-semibold leading-6">
+        {title}
+      </Typography>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {fields.map(({ label, value }) => (
+          <div key={label} className="flex flex-col gap-1">
+            <span className="font-sans text-sm-rem font-medium leading-[1.4] text-[var(--tertiary)]">
+              {label}
+            </span>
+            <span className="font-sans text-sm-rem font-normal leading-[1.4] whitespace-pre-wrap text-[var(--primary)]">
+              {renderFieldValue(value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchStatusBadge({ status }: { status: 'Matched' | 'Not matched' | 'Not extracted' }) {
+  const variant = status === 'Matched' ? 'success' : status === 'Not matched' ? 'warning' : 'secondary';
+  return (
+    <div className="inline-flex w-fit max-w-full whitespace-nowrap">
+      <Badge variant={variant}>
+        <span className="whitespace-nowrap">{status}</span>
+      </Badge>
+    </div>
+  );
+}
+
+const RECON_STATUS_META = {
+  MATCH: { label: 'Match', variant: 'success' as const },
+  SHORT: { label: 'Short', variant: 'warning' as const },
+  EXCESS: { label: 'Excess', variant: 'warning' as const },
+  DAMAGED: { label: 'Damaged', variant: 'danger' as const },
+} as const;
+
 export function EpodProcessDetailDrawer({
   item,
   open,
@@ -131,20 +184,50 @@ export function EpodProcessDetailDrawer({
   onLineReview,
   onLineOverride,
   onResolveException,
+  onSaveOcrEdits,
   previewUrl,
   canPreview,
   onPreview,
 }: EpodProcessDetailDrawerProps) {
   const readOnly = role === 'Transporter';
-  const draft = item ? createEpodOcrDraft(item) : null;
+  const [draft, setDraft] = useState(() => (item ? createEpodOcrDraft(item) : null));
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  useEffect(() => {
+    setDraft(item ? createEpodOcrDraft(item) : null);
+  }, [item]);
+  const originalDraft = useMemo(() => (item ? createEpodOcrDraft(item) : null), [item]);
+  const hasDraftChanges = useMemo(() => {
+    if (!draft || !originalDraft) {
+      return false;
+    }
+    return JSON.stringify(draft) !== JSON.stringify(originalDraft);
+  }, [draft, originalDraft]);
   const deliveryReviewStatus = draft?.deliveryReviewStatus ?? null;
-  const isClean = deliveryReviewStatus === 'clean';
-  const isUnclean = deliveryReviewStatus === 'unclean';
   const showPreview = Boolean(previewUrl && canPreview !== false);
 
   if (!item || !draft) {
     return null;
   }
+
+  const comparisonRows = getDrawerComparisonRows(item, draft);
+  const reconciliationBadgeStatuses = Array.from(new Set(item.lineItems.map((line) => line.reconStatus)));
+
+  const updateDraft = (next: Partial<typeof draft>) => {
+    setDraft((current) => (current ? { ...current, ...next } : current));
+  };
+
+  const handleSaveDrawerDraft = async () => {
+    if (!hasDraftChanges) {
+      return;
+    }
+
+    try {
+      setIsSavingDraft(true);
+      await onSaveOcrEdits(draft);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
 
   const footerActions =
     role === 'Reviewer'
@@ -169,14 +252,30 @@ export function EpodProcessDetailDrawer({
         <DrawerHeader>
           <div className="flex w-full items-start justify-between gap-4">
             <div className="flex flex-col gap-2">
-              <DrawerTitle>{item.fileName}</DrawerTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant={item.statusVariant}>{item.statusLabel}</Badge>
-                <Badge variant="secondary">{item.confidenceLabel} confidence</Badge>
-                {deliveryReviewStatus ? (
-                  <Badge variant={deliveryReviewStatus === 'clean' ? 'success' : 'warning'}>
-                    {deliveryReviewStatus === 'clean' ? 'Clean delivery' : 'Unclean delivery'}
-                  </Badge>
+              <DrawerTitle className="text-[1rem] font-semibold leading-6">{item.fileName}</DrawerTitle>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex w-fit">
+                    <Badge variant={item.statusVariant}>{item.statusLabel}</Badge>
+                  </div>
+                  <div className="inline-flex w-fit">
+                    <Badge variant="secondary">{item.confidenceLabel} confidence</Badge>
+                  </div>
+                  <div className="inline-flex w-fit">
+                    <Badge variant={draft.stampPresent ? 'success' : 'danger'}>
+                      {draft.stampPresent ? 'Stamp present' : 'Stamp missing'}
+                    </Badge>
+                  </div>
+                  <div className="inline-flex w-fit">
+                    <Badge variant={draft.signaturePresent ? 'success' : 'danger'}>
+                      {draft.signaturePresent ? 'Signature present' : 'Signature missing'}
+                    </Badge>
+                  </div>
+                  {deliveryReviewStatus ? (
+                    <div className="inline-flex w-fit">
+                      <Badge variant={deliveryReviewStatus === 'clean' ? 'success' : 'warning'}>
+                        {deliveryReviewStatus === 'clean' ? 'Clean delivery' : 'Unclean delivery'}
+                      </Badge>
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -191,7 +290,7 @@ export function EpodProcessDetailDrawer({
               </Alert>
             ) : null}
 
-            <Tabs type="primary" showLine defaultValue="overview">
+            <Tabs type="primary" defaultValue="overview">
               <TabsList
                 className="w-full rounded-none border-b border-border-primary bg-transparent p-0"
                 style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 0 }}
@@ -254,81 +353,138 @@ export function EpodProcessDetailDrawer({
                     )
                   ) : null}
 
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
-                      <Typography variant="title-secondary" color="primary">
-                        Shipment data in system
-                      </Typography>
-                      <div className="flex flex-col" style={{ gap: rem14(12) }}>
-                        {(
-                          [
-                            ['AWB Number', item.systemData.awbNumber],
-                            ['Shipment ID', item.systemData.shipmentId],
-                            ['From', item.systemData.fromName],
-                            ['From city', item.systemData.fromSubtext],
-                            ['To', item.systemData.toName],
-                            ['To city', item.systemData.toSubtext],
-                            ['Transporter', item.systemData.transporter],
-                            ['Delivered Date', item.systemData.deliveredDate],
-                          ] as const
-                        ).map(([label, value]) => (
-                          <div key={label} className="flex flex-col gap-1">
-                            <span className="font-sans text-sm-rem font-medium leading-[1.4] text-[var(--tertiary)]">
-                              {label}
-                            </span>
-                            <span className="font-sans text-sm-rem font-normal leading-[1.4] text-[var(--primary)] whitespace-pre-wrap">
-                              {renderValue(value)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  <OverviewCard title="System shipment data" fields={getSystemShipmentFields(item)} />
 
-                    <div className="flex flex-col rounded-xl border border-border-primary p-6" style={{ gap: rem14(12) }}>
-                      <Typography variant="title-secondary" color="primary" className="text-md">
-                        OCR extracted POD data
-                      </Typography>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        {(
-                          [
-                            ['Extracted AWB', draft.extractedAwb],
-                            ['Extracted Consignee', draft.extractedConsignee],
-                            ['Extracted Delivery Date', draft.extractedDeliveryDate],
-                            ['Extracted From', draft.extractedFrom],
-                            ['Extracted To', draft.extractedTo],
-                            ['Remarks', draft.remarks],
-                            ['Condition Notes', draft.conditionNotes],
-                          ] as const
-                        ).map(([label, value]) => (
-                          <div key={label} className="flex flex-col gap-1">
-                            <Typography variant="body-secondary-medium" color="secondary">
-                              {label}
-                            </Typography>
-                            <Typography variant="body-secondary-regular" color="primary">
-                              {renderValue(value)}
-                            </Typography>
+                  <div className="flex flex-col py-1" style={{ gap: rem14(12) }}>
+                    <Typography variant="body-primary-medium" color="primary" className="text-[1rem] font-semibold leading-6">
+                      ePOD extracted information
+                    </Typography>
+                    {reconciliationBadgeStatuses.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {reconciliationBadgeStatuses.map((status) => (
+                          <div key={status} className="inline-flex w-fit">
+                            <Badge variant={RECON_STATUS_META[status].variant}>{RECON_STATUS_META[status].label}</Badge>
                           </div>
                         ))}
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={draft.stampPresent ? 'success' : 'secondary'}>
-                          {draft.stampPresent ? 'Stamp present' : 'Stamp missing'}
-                        </Badge>
-                        <Badge variant={draft.signaturePresent ? 'success' : 'secondary'}>
-                          {draft.signaturePresent ? 'Signature present' : 'Signature missing'}
-                        </Badge>
-                        {deliveryReviewStatus ? (
-                          <Badge variant={deliveryReviewStatus === 'clean' ? 'success' : 'warning'}>
-                            {deliveryReviewStatus === 'clean' ? 'Clean delivery' : 'Unclean delivery'}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      {!readOnly && onPreview ? (
-                        <Button variant="secondary" onClick={onPreview}>
-                          Open image review workspace
+                    ) : null}
+                    <Table style={{ tableLayout: 'fixed', width: '100%' }}>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead colorVariant="bg" style={{ width: '20%' }}>Labels</TableHead>
+                          <TableHead colorVariant="bg" style={{ width: '12%', borderLeft: '1px solid var(--border-primary)' }}>Shipment details</TableHead>
+                          <TableHead colorVariant="bg" style={{ width: '38%', borderLeft: '1px solid var(--border-primary)' }}>OCR extracted details</TableHead>
+                          <TableHead colorVariant="bg" style={{ width: '16%', borderLeft: '1px solid var(--border-primary)' }}>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {comparisonRows.map((row) => (
+                          <TableRow key={row.label}>
+                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', width: '20%' }}>
+                              <Typography variant="body-secondary-medium" color="primary">
+                                {row.label}
+                              </Typography>
+                            </TableCell>
+                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', whiteSpace: 'pre-wrap', width: '12%', borderLeft: '1px solid var(--border-primary)' }}>
+                              {row.shipmentDetails}
+                            </TableCell>
+                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', whiteSpace: 'pre-wrap', width: '38%', borderLeft: '1px solid var(--border-primary)' }}>
+                              {readOnly ? (
+                                row.ocrDetails
+                              ) : row.key === 'awb' ? (
+                                <Input>
+                                  <InputField
+                                    value={draft.extractedAwb ?? ''}
+                                    onChange={(event) => updateDraft({ extractedAwb: event.target.value || null })}
+                                    placeholder="Enter AWB number"
+                                  />
+                                </Input>
+                              ) : row.key === 'consignee' ? (
+                                <Input>
+                                  <InputField
+                                    value={draft.extractedConsignee ?? ''}
+                                    onChange={(event) => updateDraft({ extractedConsignee: event.target.value || null })}
+                                    placeholder="Enter consignee name"
+                                  />
+                                </Input>
+                              ) : row.key === 'deliveryDate' ? (
+                                <Input>
+                                  <InputField
+                                    value={draft.extractedDeliveryDate ?? ''}
+                                    onChange={(event) => updateDraft({ extractedDeliveryDate: event.target.value || null })}
+                                    placeholder="Enter delivery date"
+                                  />
+                                </Input>
+                              ) : row.key === 'lineItems' ? (
+                                <Textarea>
+                                  <TextareaField
+                                    value={draft.description ?? ''}
+                                    onChange={(event) => updateDraft({ description: event.target.value || null })}
+                                    placeholder="Enter SKU / item description"
+                                    rows={3}
+                                  />
+                                </Textarea>
+                              ) : row.key === 'quantities' ? (
+                                <Textarea>
+                                  <TextareaField
+                                    value={draft.receivedQuantityNotes ?? ''}
+                                    onChange={(event) => updateDraft({ receivedQuantityNotes: event.target.value || null })}
+                                    placeholder="Enter received quantities"
+                                    rows={3}
+                                  />
+                                </Textarea>
+                              ) : row.key === 'remarks' ? (
+                                <Textarea>
+                                  <TextareaField
+                                    value={draft.remarks ?? ''}
+                                    onChange={(event) => updateDraft({ remarks: event.target.value || null })}
+                                    placeholder="Enter damage or shortage remarks"
+                                    rows={3}
+                                  />
+                                </Textarea>
+                              ) : row.key === 'stamp' ? (
+                                <div className="flex flex-col gap-2">
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="radio"
+                                      name={`stamp-status-${item.id}`}
+                                      checked={draft.stampPresent === true}
+                                      onChange={() => updateDraft({ stampPresent: true })}
+                                    />
+                                    <Typography variant="body-secondary-regular" color="primary">
+                                      Present
+                                    </Typography>
+                                  </label>
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="radio"
+                                      name={`stamp-status-${item.id}`}
+                                      checked={draft.stampPresent === false}
+                                      onChange={() => updateDraft({ stampPresent: false })}
+                                    />
+                                    <Typography variant="body-secondary-regular" color="primary">
+                                      Missing
+                                    </Typography>
+                                  </label>
+                                </div>
+                              ) : (
+                                row.ocrDetails
+                              )}
+                            </TableCell>
+                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', width: '16%', borderLeft: '1px solid var(--border-primary)' }}>
+                              <MatchStatusBadge status={row.matchStatus} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {!readOnly ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button variant="primary" onClick={() => void handleSaveDrawerDraft()} disabled={!hasDraftChanges} loading={isSavingDraft}>
+                          Save OCR changes
                         </Button>
-                      ) : null}
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </TabsContent>

@@ -7,12 +7,19 @@ const EPOD_OCR_PROMPT = `You are analyzing a Proof of Delivery (POD) / consignme
   "transporter_name": "Transport company name",
   "consignor_name": "Sender name",
   "consignor_address": "Sender full address",
+  "consignor_phone": "Sender phone number or null",
+  "consignor_pin": "Sender PIN/postal code or null",
+  "gst_number_consignor": "Sender GST number or null",
   "consignee_name": "Receiver name",
   "consignee_address": "Receiver full address",
+  "consignee_phone": "Receiver phone number or null",
+  "consignee_pin": "Receiver PIN/postal code or null",
+  "gst_number_consignee": "Receiver GST number or null",
   "from_city": "Origin city",
   "to_city": "Destination city",
   "delivery_date": "YYYY-MM-DD or null",
   "booking_date": "YYYY-MM-DD or null",
+  "booking_branch": "Booking branch/location code or null",
   "receiver_name": "Person who received",
   "stamp_present": true/false,
   "signature_present": true/false,
@@ -21,9 +28,18 @@ const EPOD_OCR_PROMPT = `You are analyzing a Proof of Delivery (POD) / consignme
   "description": "Item description",
   "invoice_number": "Invoice number or null",
   "invoice_value": number or null,
+  "number_of_invoices": number or null,
+  "freight_mode": "Road/Surface/Air/etc or null",
+  "freight_amount": "Freight amount or null",
   "remarks": "Any remarks/damage/shortage notes",
   "condition_notes": "Condition of goods",
-  "payment_mode": "PAID/TO PAY/CREDIT/COD or null"
+  "payment_mode": "PAID/TO PAY/CREDIT/COD or null",
+  "ewaybill_number": "E-way bill number or null",
+  "dimensions": "Dimensions text or null",
+  "receiver_name_stamp": "Receiver name / stamp text or null",
+  "receiver_phone": "Receiver phone or null",
+  "vehicle_number": "Vehicle number or null",
+  "pod_copy_type": "P.O.D. copy type or null"
 }
 
 Be thorough. Use null for fields not visible.`;
@@ -33,12 +49,19 @@ export interface EpodOcrResult {
   transporter_name: string | null;
   consignor_name: string | null;
   consignor_address: string | null;
+  consignor_phone?: string | null;
+  consignor_pin?: string | null;
+  gst_number_consignor?: string | null;
   consignee_name: string | null;
   consignee_address: string | null;
+  consignee_phone?: string | null;
+  consignee_pin?: string | null;
+  gst_number_consignee?: string | null;
   from_city: string | null;
   to_city: string | null;
   delivery_date: string | null;
   booking_date: string | null;
+  booking_branch?: string | null;
   receiver_name: string | null;
   stamp_present: boolean;
   signature_present: boolean;
@@ -47,9 +70,18 @@ export interface EpodOcrResult {
   description: string | null;
   invoice_number: string | null;
   invoice_value: number | null;
+  number_of_invoices?: number | null;
+  freight_mode?: string | null;
+  freight_amount?: string | number | null;
   remarks: string | null;
   condition_notes: string | null;
   payment_mode: string | null;
+  ewaybill_number?: string | null;
+  dimensions?: string | null;
+  receiver_name_stamp?: string | null;
+  receiver_phone?: string | null;
+  vehicle_number?: string | null;
+  pod_copy_type?: string | null;
 }
 
 export type OcrProvider = 'gemini' | 'openai';
@@ -60,12 +92,19 @@ function getEmptyResult(): EpodOcrResult {
     transporter_name: null,
     consignor_name: null,
     consignor_address: null,
+    consignor_phone: null,
+    consignor_pin: null,
+    gst_number_consignor: null,
     consignee_name: null,
     consignee_address: null,
+    consignee_phone: null,
+    consignee_pin: null,
+    gst_number_consignee: null,
     from_city: null,
     to_city: null,
     delivery_date: null,
     booking_date: null,
+    booking_branch: null,
     receiver_name: null,
     stamp_present: false,
     signature_present: false,
@@ -74,9 +113,18 @@ function getEmptyResult(): EpodOcrResult {
     description: null,
     invoice_number: null,
     invoice_value: null,
+    number_of_invoices: null,
+    freight_mode: null,
+    freight_amount: null,
     remarks: null,
     condition_notes: null,
     payment_mode: null,
+    ewaybill_number: null,
+    dimensions: null,
+    receiver_name_stamp: null,
+    receiver_phone: null,
+    vehicle_number: null,
+    pod_copy_type: null,
   };
 }
 

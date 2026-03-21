@@ -38,6 +38,12 @@ function writeStore<T>(key: string, value: Record<string, T>) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+export function clearLocalEpodWorkflowState() {
+  if (!canUseStorage()) return;
+  window.localStorage.removeItem(WORKFLOW_KEY);
+  window.localStorage.removeItem(SUBMISSION_KEY);
+}
+
 function generateId() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()

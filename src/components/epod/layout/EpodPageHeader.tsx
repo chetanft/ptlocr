@@ -3,7 +3,7 @@ import { Button, Icon, Typography } from 'ft-design-system';
 import { rem } from '@/lib/rem';
 
 interface EpodPageHeaderProps {
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   icon?: string;
   onBack?: () => void;
@@ -23,9 +23,11 @@ export function EpodPageHeader({ title, subtitle, icon, onBack, trailing }: Epod
         ) : null}
         {icon ? <Icon name={icon} size={24} /> : null}
         <div className="flex flex-col">
-          <Typography variant="title-secondary" color="primary">
-            {title}
-          </Typography>
+          <div className="flex flex-wrap items-center gap-3">
+            <Typography variant="title-secondary" color="primary">
+              {title}
+            </Typography>
+          </div>
           {subtitle ? (
             <Typography variant="body-primary-regular" color="tertiary">
               {subtitle}

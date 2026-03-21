@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import type { AuthUser, LoginCredentials } from "@/auth/authTypes";
+import { clearLocalEpodWorkflowState } from "@/lib/epodClientStore";
+import { resetShipmentStatusOverrides } from "@/lib/epod/shipmentStatusStore";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -164,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     window.localStorage.removeItem(STORAGE_KEY);
+    clearLocalEpodWorkflowState();
+    resetShipmentStatusOverrides();
     setUser(null);
     setError(null);
   }, []);

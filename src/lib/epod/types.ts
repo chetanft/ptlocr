@@ -11,6 +11,13 @@ export interface EpodShipmentRow {
   uploadedAt?: string;
   exceptionSummary?: string;
   confidenceLabel?: string;
+  lineItems?: Array<{
+    sku: string | null;
+    description: string;
+    sentQty: number;
+    receivedQty?: number | null;
+    damagedQty?: number | null;
+  }>;
   status: 'Pending Submission' | 'Pending Approval' | 'Rejected' | 'Approved';
 }
 
@@ -20,11 +27,20 @@ export interface EpodExtractedPodData {
   awb_number: string | null;
   transporter_name: string | null;
   consignor_name: string | null;
+  consignor_address?: string | null;
+  consignor_phone?: string | null;
+  consignor_pin?: string | null;
+  gst_number_consignor?: string | null;
   consignee_name: string | null;
+  consignee_address?: string | null;
+  consignee_phone?: string | null;
+  consignee_pin?: string | null;
+  gst_number_consignee?: string | null;
   from_city: string | null;
   to_city: string | null;
   delivery_date: string | null;
   booking_date: string | null;
+  booking_branch?: string | null;
   receiver_name: string | null;
   stamp_present: boolean;
   signature_present: boolean;
@@ -33,20 +49,15 @@ export interface EpodExtractedPodData {
   description: string | null;
   invoice_number: string | null;
   invoice_value: number | null;
+  number_of_invoices?: number | null;
   freight_mode: string | null;
   docket_number: string | null;
+  transporter_id?: string | null;
   vehicle_number: string | null;
   remarks: string | null;
   condition_notes: string | null;
-  booking_branch?: string | null;
   payment_mode?: string | null;
   pod_copy_type?: string | null;
-  consignor_address?: string | null;
-  consignor_phone?: string | null;
-  consignor_pin?: string | null;
-  consignee_address?: string | null;
-  consignee_phone?: string | null;
-  consignee_pin?: string | null;
 }
 
 export interface EpodExtractedPodRecord {
