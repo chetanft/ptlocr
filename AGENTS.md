@@ -14,3 +14,6 @@
 - Workspace px-to-rem uses `@/lib/rem` with a 16px root; the rem14 name is a legacy alias and does not mean a 14px root
 - In ft-design-system data tables, header label color is often driven by the table header item / inner label APIs (e.g. colorVariant), not only by setting color on the th element
 - ft-design-system AppHeader does not bundle a full theme switcher by default; use ThemeSwitch for dedicated theme UI, or wire AppHeader showThemeIcon and onThemeIconClick if a compact header affordance is needed
+- Many ft-design-system components merge `className` last (e.g. via `cn()`); add utilities such as `font-semibold` or `text-md` on the component to override default typography when the implementation lives in node_modules
+- ePOD process drawer overview fields and shipment-vs-OCR comparison row labels are defined in `src/components/epod/process/epodOverviewSections.ts`; update labels there so both views stay aligned
+- ft-design-system `ModalContent` may apply an inline width (e.g. `32.5rem`); use a width utility with the Tailwind important modifier, such as `!w-[min(1200px,96vw)]`, when the modal must be wider than the default

@@ -27,6 +27,10 @@ import {
   TabsList,
   TabsTrigger,
   Typography,
+  RadioGroup,
+  RadioItem,
+  RadioItemInput,
+  RadioItemLabel,
 } from 'ft-design-system';
 import type { ProcessedItem, ProcessedLineItem, ProcessedOcrPatch } from '@/lib/epodApi';
 import { ExceptionBadge } from '@/components/pod/ExceptionBadge';
@@ -37,6 +41,9 @@ import {
   getSystemShipmentFields,
   renderFieldValue,
 } from './epodOverviewSections';
+
+/** Row hover: bottom border matches secondary surface (TableCell defaults to --border-primary). */
+const TABLE_CELL_ROW_HOVER_BORDER = 'group-hover/table-row:border-b-[var(--border-secondary)]';
 
 type Role = 'Transporter' | 'Ops' | 'Reviewer';
 
@@ -88,7 +95,7 @@ function ReconciliationTab({
       <TableBody>
         {item.lineItems.map((line) => (
           <TableRow key={line.id}>
-            <TableCell>
+            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
               <div className="flex flex-col gap-1">
                 <Typography variant="body-primary-medium" color="primary">
                   {line.description}
@@ -98,17 +105,17 @@ function ReconciliationTab({
                 </Typography>
               </div>
             </TableCell>
-            <TableCell>{line.sentQty}</TableCell>
-            <TableCell>{line.receivedQty}</TableCell>
-            <TableCell>{line.damagedQty}</TableCell>
-            <TableCell>{line.difference}</TableCell>
-            <TableCell>
+            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.sentQty}</TableCell>
+            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.receivedQty}</TableCell>
+            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.damagedQty}</TableCell>
+            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.difference}</TableCell>
+            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
               <Badge variant={RECON_STATUS_META[line.reconStatus].variant}>
                 {RECON_STATUS_META[line.reconStatus].label}
               </Badge>
             </TableCell>
             {!readOnly ? (
-              <TableCell>
+              <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="secondary" onClick={() => onLineReview(line.id, 'ACCEPTED')}>
                     Accept
@@ -371,24 +378,44 @@ export function EpodProcessDetailDrawer({
                     <Table style={{ tableLayout: 'fixed', width: '100%' }}>
                       <TableHeader>
                         <TableRow>
-                          <TableHead colorVariant="bg" style={{ width: '20%' }}>Labels</TableHead>
-                          <TableHead colorVariant="bg" style={{ width: '12%', borderLeft: '1px solid var(--border-primary)' }}>Shipment details</TableHead>
-                          <TableHead colorVariant="bg" style={{ width: '38%', borderLeft: '1px solid var(--border-primary)' }}>OCR extracted details</TableHead>
-                          <TableHead colorVariant="bg" style={{ width: '16%', borderLeft: '1px solid var(--border-primary)' }}>Status</TableHead>
+                          <TableHead colorVariant="bg" style={{ width: '20%' }}>
+                            Labels
+                          </TableHead>
+                          <TableHead colorVariant="bg" className="border-l border-[var(--border-primary)]" style={{ width: '12%' }}>
+                            Shipment details
+                          </TableHead>
+                          <TableHead colorVariant="bg" className="border-l border-[var(--border-primary)]" style={{ width: '38%' }}>
+                            OCR extracted details
+                          </TableHead>
+                          <TableHead colorVariant="bg" className="border-l border-[var(--border-primary)]" style={{ width: '16%' }}>
+                            Status
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {comparisonRows.map((row) => (
                           <TableRow key={row.label}>
-                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', width: '20%' }}>
+                            <TableCell
+                              lineVariant="multi"
+                              className={TABLE_CELL_ROW_HOVER_BORDER}
+                              style={{ verticalAlign: 'top', width: '20%' }}
+                            >
                               <Typography variant="body-secondary-medium" color="primary">
                                 {row.label}
                               </Typography>
                             </TableCell>
-                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', whiteSpace: 'pre-wrap', width: '12%', borderLeft: '1px solid var(--border-primary)' }}>
+                            <TableCell
+                              lineVariant="multi"
+                              className={`border-l border-[var(--border-primary)] ${TABLE_CELL_ROW_HOVER_BORDER}`}
+                              style={{ verticalAlign: 'top', whiteSpace: 'pre-wrap', width: '12%' }}
+                            >
                               {row.shipmentDetails}
                             </TableCell>
-                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', whiteSpace: 'pre-wrap', width: '38%', borderLeft: '1px solid var(--border-primary)' }}>
+                            <TableCell
+                              lineVariant="multi"
+                              className={`border-l border-[var(--border-primary)] ${TABLE_CELL_ROW_HOVER_BORDER}`}
+                              style={{ verticalAlign: 'top', whiteSpace: 'pre-wrap', width: '38%' }}
+                            >
                               {readOnly ? (
                                 row.ocrDetails
                               ) : row.key === 'awb' ? (
@@ -443,35 +470,34 @@ export function EpodProcessDetailDrawer({
                                   />
                                 </Textarea>
                               ) : row.key === 'stamp' ? (
-                                <div className="flex flex-col gap-2">
-                                  <label className="flex items-center gap-2">
-                                    <input
-                                      type="radio"
-                                      name={`stamp-status-${item.id}`}
-                                      checked={draft.stampPresent === true}
-                                      onChange={() => updateDraft({ stampPresent: true })}
-                                    />
-                                    <Typography variant="body-secondary-regular" color="primary">
-                                      Present
-                                    </Typography>
-                                  </label>
-                                  <label className="flex items-center gap-2">
-                                    <input
-                                      type="radio"
-                                      name={`stamp-status-${item.id}`}
-                                      checked={draft.stampPresent === false}
-                                      onChange={() => updateDraft({ stampPresent: false })}
-                                    />
-                                    <Typography variant="body-secondary-regular" color="primary">
-                                      Missing
-                                    </Typography>
-                                  </label>
-                                </div>
+                                <RadioGroup
+                                  name={`stamp-status-${item.id}`}
+                                  value={
+                                    draft.stampPresent === true ? 'present' : draft.stampPresent === false ? 'missing' : ''
+                                  }
+                                  onValueChange={(next) => updateDraft({ stampPresent: next === 'present' })}
+                                  size="sm"
+                                  orientation="vertical"
+                                  className="gap-2"
+                                >
+                                  <RadioItem value="present">
+                                    <RadioItemInput />
+                                    <RadioItemLabel>Present</RadioItemLabel>
+                                  </RadioItem>
+                                  <RadioItem value="missing">
+                                    <RadioItemInput />
+                                    <RadioItemLabel>Missing</RadioItemLabel>
+                                  </RadioItem>
+                                </RadioGroup>
                               ) : (
                                 row.ocrDetails
                               )}
                             </TableCell>
-                            <TableCell lineVariant="multi" style={{ verticalAlign: 'top', width: '16%', borderLeft: '1px solid var(--border-primary)' }}>
+                            <TableCell
+                              lineVariant="multi"
+                              className={`border-l border-[var(--border-primary)] ${TABLE_CELL_ROW_HOVER_BORDER}`}
+                              style={{ verticalAlign: 'top', width: '16%' }}
+                            >
                               <MatchStatusBadge status={row.matchStatus} />
                             </TableCell>
                           </TableRow>

@@ -90,12 +90,12 @@ export function getDrawerExtractedInfoFields(item: ProcessedItem): EpodOverviewF
 
   return [
     { label: 'AWB Number', value: item.ocrData.extractedAwb ?? item.awbNumber },
-    { label: 'Consignee name', value: item.ocrData.extractedConsignee ?? item.consigneeName },
+    { label: 'Consignee', value: item.ocrData.extractedConsignee ?? item.consigneeName },
     { label: 'Delivery date', value: item.ocrData.extractedDeliveryDate },
-    { label: 'Line items (SKU / description if available)', value: lineItems ?? null },
-    { label: 'Sent vs Received quantities', value: sentVsReceived },
-    { label: 'Remarks (damage, shortage notes)', value: item.ocrData.remarks ?? item.ocrData.conditionNotes },
-    { label: 'Consignee stamp presence', value: item.ocrData.stampPresent ? 'Present' : 'Missing' },
+    { label: 'SKU & Description', value: lineItems ?? null },
+    { label: 'Quantities', value: sentVsReceived },
+    { label: 'Remarks', value: item.ocrData.remarks ?? item.ocrData.conditionNotes },
+    { label: 'Stamp', value: item.ocrData.stampPresent ? 'Present' : 'Missing' },
   ];
 }
 
@@ -203,7 +203,7 @@ export function getDrawerComparisonRows(
     },
     {
       key: 'consignee',
-      label: 'Consignee name',
+      label: 'Consignee',
       shipmentDetails: valueOrDash(item.systemData.toName ?? item.consigneeName),
       ocrDetails: valueOrDash(consigneeOcr),
       matchStatus: !consigneeOcr
@@ -225,7 +225,7 @@ export function getDrawerComparisonRows(
     },
     {
       key: 'lineItems',
-      label: 'Line items (SKU / description if available)',
+      label: 'SKU & Description',
       shipmentDetails: shipmentLineItems,
       ocrDetails: ocrLineDescription,
       matchStatus: !lineItemsOcr
@@ -236,7 +236,7 @@ export function getDrawerComparisonRows(
     },
     {
       key: 'quantities',
-      label: 'Sent vs Received quantities',
+      label: 'Quantities',
       shipmentDetails: shipmentQuantities,
       ocrDetails: valueOrDash(quantityNotes),
       matchStatus: !hasReceivedValues
@@ -247,14 +247,14 @@ export function getDrawerComparisonRows(
     },
     {
       key: 'remarks',
-      label: 'Remarks (damage, shortage notes)',
+      label: 'Remarks',
       shipmentDetails: '—',
       ocrDetails: valueOrDash(remarksOcr),
       matchStatus: !remarksOcr ? 'Not extracted' : 'Not matched',
     },
     {
       key: 'stamp',
-      label: 'Consignee stamp presence',
+      label: 'Stamp',
       shipmentDetails: '—',
       ocrDetails: (draft?.stampPresent ?? item.ocrData.stampPresent) ? 'Present' : 'Missing',
       matchStatus:
