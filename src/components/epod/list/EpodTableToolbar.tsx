@@ -28,7 +28,7 @@ export function EpodTableToolbar({
       <Typography variant="body-secondary-semibold" color="primary">
         {selectedCount > 0 ? `${String(selectedCount).padStart(2, '0')} AWBs selected` : `${totalCount} AWBs available`}
       </Typography>
-      <div className="flex items-center gap-[18px]">
+      <div className="flex items-center gap-[1.125rem]">
         {selectedCount > 0 ? (
           <Button variant="secondary" icon="download" size="md">
             Download AWBs

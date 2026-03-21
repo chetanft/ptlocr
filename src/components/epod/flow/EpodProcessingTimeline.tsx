@@ -50,11 +50,11 @@ export function EpodProcessingTimeline({ activeStep, batch }: EpodProcessingTime
                 {/* Step row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: rem(16) }}>
                   {/* Circle */}
-                  <div style={{ width: 32, height: 32, position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: rem(32), height: rem(32), position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {isCompleted ? (
                       /* Completed: dark circle with checkmark */
                       <div style={{
-                        width: 24, height: 24, borderRadius: '50%',
+                        width: rem(24), height: rem(24), borderRadius: '50%',
                         backgroundColor: 'var(--primary)', display: 'flex',
                         alignItems: 'center', justifyContent: 'center',
                       }}>
@@ -64,7 +64,7 @@ export function EpodProcessingTimeline({ activeStep, batch }: EpodProcessingTime
                       /* Active: dark circle with spinning arc */
                       <>
                         <div style={{
-                          width: 24, height: 24, borderRadius: '50%',
+                          width: rem(24), height: rem(24), borderRadius: '50%',
                           backgroundColor: 'var(--primary)', display: 'flex',
                           alignItems: 'center', justifyContent: 'center',
                           position: 'relative', zIndex: 1,
@@ -74,7 +74,7 @@ export function EpodProcessingTimeline({ activeStep, batch }: EpodProcessingTime
                         {/* Spinner arc */}
                         <div style={{
                           position: 'absolute', inset: 0,
-                          width: 32, height: 32,
+                          width: rem(32), height: rem(32),
                           borderRadius: '50%',
                           border: '2.5px solid transparent',
                           borderTopColor: 'var(--primary)',
@@ -85,11 +85,11 @@ export function EpodProcessingTimeline({ activeStep, batch }: EpodProcessingTime
                     ) : (
                       /* Future: gray circle with number */
                       <div style={{
-                        width: 24, height: 24, borderRadius: '50%',
+                        width: rem(24), height: rem(24), borderRadius: '50%',
                         backgroundColor: 'var(--border-primary)', display: 'flex',
                         alignItems: 'center', justifyContent: 'center',
                       }}>
-                        <span style={{ color: 'var(--primary)', fontSize: 10, fontWeight: 500 }}>
+                        <span style={{ color: 'var(--primary)', fontSize: rem(10), fontWeight: 500 }}>
                           {index + 1}
                         </span>
                       </div>
@@ -107,10 +107,10 @@ export function EpodProcessingTimeline({ activeStep, batch }: EpodProcessingTime
 
                 {/* Vertical connector */}
                 {!isLast ? (
-                  <div style={{ width: 32, display: 'flex', justifyContent: 'center', height: rem(24) }}>
+                  <div style={{ width: rem(32), display: 'flex', justifyContent: 'center', height: rem(24) }}>
                     {isCompleted ? (
                       /* Solid line for completed */
-                      <div style={{ width: 2, height: '100%', backgroundColor: 'var(--primary)' }} />
+                      <div style={{ width: rem(2), height: '100%', backgroundColor: 'var(--primary)' }} />
                     ) : (
                       /* Dashed line for pending */
                       <div style={{

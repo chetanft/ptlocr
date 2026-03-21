@@ -483,7 +483,7 @@ function buildLineItems(
         damagedQty,
         difference,
         reconStatus,
-        reviewAction: reconStatus === 'MATCH' ? 'ACCEPTED' : undefined,
+        reviewAction: 'PENDING',
         note: reconStatus === 'MATCH' ? null : 'Line item quantities need to be verified against the uploaded POD image',
       };
     });
@@ -513,7 +513,7 @@ function buildLineItems(
       damagedQty,
       difference,
       reconStatus,
-      reviewAction: reconStatus === 'MATCH' ? 'ACCEPTED' : undefined,
+      reviewAction: 'PENDING',
       note:
         reconStatus === 'MATCH'
           ? null
@@ -813,7 +813,7 @@ function buildUnmappedItem(file: File, actor: string, reason: string, reportReco
     toSubtext: ext?.to_city ?? null,
     transporter: ext?.transporter_name ?? reportRecord?.transporter ?? null,
     statusLabel: 'Unmapped',
-    statusVariant: 'danger',
+    statusVariant: 'secondary',
     reason,
     confidence: 0.25,
     confidenceLabel: 'Low',

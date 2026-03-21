@@ -12,6 +12,7 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
+  Icon,
   Input,
   InputField,
   Table,
@@ -32,7 +33,7 @@ import {
   RadioItemInput,
   RadioItemLabel,
 } from 'ft-design-system';
-import type { ProcessedItem, ProcessedLineItem, ProcessedOcrPatch } from '@/lib/epodApi';
+import type { LineOverridePatch, ProcessedItem, ProcessedLineItem, ProcessedOcrPatch } from '@/lib/epodApi';
 import { ExceptionBadge } from '@/components/pod/ExceptionBadge';
 import { rem14 } from '@/lib/rem';
 import { createEpodOcrDraft } from './epodOcrDraft';
@@ -52,9 +53,9 @@ interface EpodProcessDetailDrawerProps {
   open: boolean;
   role: Role;
   onOpenChange: (open: boolean) => void;
-  onDocumentAction: (action: 'reject' | 'sendToReviewer' | 'approve') => void;
+  onDocumentAction: (action: 'reject' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection') => void;
   onLineReview: (lineId: string, action: 'ACCEPTED' | 'REJECTED') => void;
-  onLineOverride: (lineId: string) => void;
+  onLineOverride: (lineId: string, overridePatch: LineOverridePatch) => void;
   onResolveException: (exceptionId: string) => void;
   onSaveOcrEdits: (ocrPatch: ProcessedOcrPatch) => Promise<void> | void;
   previewUrl?: string | null;
@@ -62,16 +63,52 @@ interface EpodProcessDetailDrawerProps {
   onPreview?: () => void;
 }
 
+type OverrideDraft = {
+  receivedQty: string;
+  damagedQty: string;
+  note: string;
+};
+
+function toOverrideDraft(line: ProcessedLineItem): OverrideDraft {
+  return {
+    receivedQty: String(line.receivedQty),
+    damagedQty: String(line.damagedQty),
+    note: line.note ?? '',
+  };
+}
+
+function parseQuantity(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
+}
+
 function ReconciliationTab({
   item,
   readOnly,
   onLineReview,
   onLineOverride,
+  overrideLineId,
+  overrideDrafts,
+  onStartOverride,
+  onCancelOverride,
+  onOverrideDraftChange,
+  onSaveOverride,
+  onDocumentAction,
 }: {
   item: ProcessedItem;
   readOnly: boolean;
   onLineReview: (lineId: string, action: 'ACCEPTED' | 'REJECTED') => void;
-  onLineOverride: (lineId: string) => void;
+  onLineOverride: (lineId: string, overridePatch: LineOverridePatch) => void;
+  overrideLineId: string | null;
+  overrideDrafts: Record<string, OverrideDraft>;
+  onStartOverride: (line: ProcessedLineItem) => void;
+  onCancelOverride: () => void;
+  onOverrideDraftChange: (lineId: string, next: Partial<OverrideDraft>) => void;
+  onSaveOverride: (line: ProcessedLineItem) => void;
+  onDocumentAction: (action: 'approveClean' | 'approveUnclean' | 'approveRejection') => void;
 }) {
   const headerCell = (label: string) => (
     <Typography variant="body-secondary-medium" color="primary">
@@ -79,60 +116,198 @@ function ReconciliationTab({
     </Typography>
   );
 
+  const allRowsDecided =
+    item.lineItems.length > 0 && item.lineItems.every((line) => line.reviewAction && line.reviewAction !== 'PENDING');
+  const hasRejectedRows = item.lineItems.some((line) => line.reviewAction === 'REJECTED');
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('SKU / Description')}</TableHead>
-          <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Sent Qty')}</TableHead>
-          <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Received Qty')}</TableHead>
-          <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Damaged Qty')}</TableHead>
-          <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Difference')}</TableHead>
-          <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Recon Status')}</TableHead>
-          {!readOnly ? <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Actions')}</TableHead> : null}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {item.lineItems.map((line) => (
-          <TableRow key={line.id}>
-            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
-              <div className="flex flex-col gap-1">
-                <Typography variant="body-primary-medium" color="primary">
-                  {line.description}
-                </Typography>
-                <Typography variant="body-secondary-regular" color="secondary">
-                  {line.sku ?? '—'}
-                </Typography>
-              </div>
-            </TableCell>
-            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.sentQty}</TableCell>
-            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.receivedQty}</TableCell>
-            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.damagedQty}</TableCell>
-            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.difference}</TableCell>
-            <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
-              <Badge variant={RECON_STATUS_META[line.reconStatus].variant}>
-                {RECON_STATUS_META[line.reconStatus].label}
-              </Badge>
-            </TableCell>
-            {!readOnly ? (
-              <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => onLineReview(line.id, 'ACCEPTED')}>
-                    Accept
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onLineOverride(line.id)}>
-                    Override
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => onLineReview(line.id, 'REJECTED')}>
-                    Reject
-                  </Button>
-                </div>
-              </TableCell>
-            ) : null}
+    <div className="flex flex-col gap-4">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('SKU / Description')}</TableHead>
+            <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Sent Qty')}</TableHead>
+            <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Received Qty')}</TableHead>
+            <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Damaged Qty')}</TableHead>
+            <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Difference')}</TableHead>
+            <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Recon Status')}</TableHead>
+            {!readOnly ? <TableHead style={{ backgroundColor: 'var(--bg-secondary)' }}>{headerCell('Actions')}</TableHead> : null}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {item.lineItems.map((line) => {
+            const isEditing = overrideLineId === line.id;
+            const draft = overrideDrafts[line.id] ?? toOverrideDraft(line);
+            return (
+              <TableRow key={line.id}>
+                <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
+                  <div className="flex flex-col gap-1">
+                    <Typography variant="body-primary-medium" color="primary">
+                      {line.description}
+                    </Typography>
+                    <Typography variant="body-secondary-regular" color="secondary">
+                      {line.sku ?? '—'}
+                    </Typography>
+                  </div>
+                </TableCell>
+                <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>{line.sentQty}</TableCell>
+                <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
+                  {isEditing ? (
+                    <Input>
+                      <InputField
+                        type="number"
+                        min="0"
+                        value={draft.receivedQty}
+                        onChange={(event) => onOverrideDraftChange(line.id, { receivedQty: event.target.value })}
+                      />
+                    </Input>
+                  ) : (
+                    line.receivedQty
+                  )}
+                </TableCell>
+                <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
+                  {isEditing ? (
+                    <Input>
+                      <InputField
+                        type="number"
+                        min="0"
+                        value={draft.damagedQty}
+                        onChange={(event) => onOverrideDraftChange(line.id, { damagedQty: event.target.value })}
+                      />
+                    </Input>
+                  ) : (
+                    line.damagedQty
+                  )}
+                </TableCell>
+                <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
+                  {isEditing ? parseQuantity(draft.receivedQty) - line.sentQty : line.difference}
+                </TableCell>
+                <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
+                  <div className="flex flex-col gap-2">
+                    <Badge variant={RECON_STATUS_META[line.reconStatus].variant}>
+                      {RECON_STATUS_META[line.reconStatus].label}
+                    </Badge>
+                    {line.reviewAction && line.reviewAction !== 'PENDING' ? (
+                      <Typography variant="body-secondary-regular" color="secondary">
+                        {line.reviewAction === 'ACCEPTED'
+                          ? 'Accepted'
+                          : line.reviewAction === 'REJECTED'
+                            ? 'Rejected'
+                            : 'Overridden'}
+                      </Typography>
+                    ) : null}
+                  </div>
+                </TableCell>
+                {!readOnly ? (
+                  <TableCell className={TABLE_CELL_ROW_HOVER_BORDER}>
+                    {isEditing ? (
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="primary" onClick={() => onSaveOverride(line)}>
+                          Save
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={onCancelOverride}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : line.reviewAction && line.reviewAction !== 'PENDING' ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant={line.reviewAction === 'REJECTED' ? 'danger' : 'secondary'}>
+                          {line.reviewAction === 'ACCEPTED'
+                            ? 'Accepted'
+                            : line.reviewAction === 'REJECTED'
+                              ? 'Rejected'
+                              : 'Overridden'}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onLineReview(line.id, 'ACCEPTED')}
+                          aria-label="Accept"
+                          style={ACTION_BUTTON_STYLES.accept}
+                        >
+                          <Icon name="check" size={16} style={{ color: 'var(--semantic-success-600)' }} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onStartOverride(line)}
+                          aria-label="Override"
+                          style={ACTION_BUTTON_STYLES.override}
+                        >
+                          <Icon name="refresh" size={16} style={{ color: 'var(--brand-primary)' }} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onLineReview(line.id, 'REJECTED')}
+                          aria-label="Reject"
+                          style={ACTION_BUTTON_STYLES.reject}
+                        >
+                          <Icon name="close" size={16} style={{ color: 'var(--critical)' }} />
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      {!readOnly ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-[var(--border-primary)] p-4">
+          {!allRowsDecided ? (
+            <>
+              <Typography variant="body-primary-medium" color="primary">
+                Please accept, override or reject all line items to mark Clean, Unclean and Reject.
+              </Typography>
+              <div className="flex items-center gap-3">
+                <Button variant="primary" disabled>
+                  Approve as Clean
+                </Button>
+                <Button variant="secondary" disabled>
+                  Approve as Unclean
+                </Button>
+                <Button variant="secondary" disabled>
+                  Reject
+                </Button>
+              </div>
+            </>
+          ) : hasRejectedRows ? (
+            <>
+              <Typography variant="body-primary-medium" color="primary">
+                This ePOD will be marked as ePOD Rejected.
+              </Typography>
+              <div className="flex items-center gap-3">
+                <Button variant="primary" onClick={() => onDocumentAction('approveRejection')}>
+                  Approve rejection
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Typography variant="body-primary-medium" color="primary">
+                Review complete. Choose final delivery disposition.
+              </Typography>
+              <div className="flex items-center gap-3">
+                <Button variant="primary" onClick={() => onDocumentAction('approveClean')}>
+                  Approve as Clean
+                </Button>
+                <Button variant="secondary" onClick={() => onDocumentAction('approveUnclean')}>
+                  Approve as Unclean
+                </Button>
+                <Button variant="secondary" onClick={() => onDocumentAction('approveRejection')}>
+                  Reject
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -182,6 +357,12 @@ const RECON_STATUS_META = {
   DAMAGED: { label: 'Damaged', variant: 'danger' as const },
 } as const;
 
+const ACTION_BUTTON_STYLES = {
+  accept: { color: 'var(--semantic-success-600)', borderColor: 'var(--semantic-success-600)' },
+  override: { color: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' },
+  reject: { color: 'var(--critical)', borderColor: 'var(--critical)' },
+} as const;
+
 export function EpodProcessDetailDrawer({
   item,
   open,
@@ -199,8 +380,12 @@ export function EpodProcessDetailDrawer({
   const readOnly = role === 'Transporter';
   const [draft, setDraft] = useState(() => (item ? createEpodOcrDraft(item) : null));
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [overrideLineId, setOverrideLineId] = useState<string | null>(null);
+  const [overrideDrafts, setOverrideDrafts] = useState<Record<string, OverrideDraft>>({});
   useEffect(() => {
     setDraft(item ? createEpodOcrDraft(item) : null);
+    setOverrideLineId(null);
+    setOverrideDrafts({});
   }, [item]);
   const originalDraft = useMemo(() => (item ? createEpodOcrDraft(item) : null), [item]);
   const hasDraftChanges = useMemo(() => {
@@ -240,23 +425,47 @@ export function EpodProcessDetailDrawer({
     }
   };
 
-  const footerActions =
-    role === 'Reviewer'
-      ? [
-          <Button key="reject" variant="secondary" onClick={() => onDocumentAction('reject')}>
-            Reject
-          </Button>,
-          <Button key="approve" variant="primary" onClick={() => onDocumentAction('approve')}>
-            Approve
-          </Button>,
-        ]
-      : role === 'Ops'
-        ? [
-            <Button key="send" variant="primary" onClick={() => onDocumentAction('sendToReviewer')}>
-              Send to reviewer
-            </Button>,
-          ]
-      : [];
+  const footerActions: JSX.Element[] = [];
+
+  const handleStartOverride = (line: ProcessedLineItem) => {
+    setOverrideLineId(line.id);
+    setOverrideDrafts((current) => ({
+      ...current,
+      [line.id]: current[line.id] ?? toOverrideDraft(line),
+    }));
+  };
+
+  const handleCancelOverride = () => {
+    if (!overrideLineId) {
+      return;
+    }
+    setOverrideDrafts((current) => {
+      const next = { ...current };
+      delete next[overrideLineId];
+      return next;
+    });
+    setOverrideLineId(null);
+  };
+
+  const handleOverrideDraftChange = (lineId: string, next: Partial<OverrideDraft>) => {
+    setOverrideDrafts((current) => ({
+      ...current,
+      [lineId]: {
+        ...(current[lineId] ?? { receivedQty: '0', damagedQty: '0', note: '' }),
+        ...next,
+      },
+    }));
+  };
+
+  const handleSaveOverride = (line: ProcessedLineItem) => {
+    const draftOverride = overrideDrafts[line.id] ?? toOverrideDraft(line);
+    onLineOverride(line.id, {
+      receivedQty: parseQuantity(draftOverride.receivedQty),
+      damagedQty: parseQuantity(draftOverride.damagedQty),
+      note: draftOverride.note.trim() || null,
+    });
+    setOverrideLineId(null);
+  };
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent placement="right" width={760}>
@@ -525,6 +734,13 @@ export function EpodProcessDetailDrawer({
                   readOnly={readOnly}
                   onLineReview={onLineReview}
                   onLineOverride={onLineOverride}
+                  overrideLineId={overrideLineId}
+                  overrideDrafts={overrideDrafts}
+                  onStartOverride={handleStartOverride}
+                  onCancelOverride={handleCancelOverride}
+                  onOverrideDraftChange={handleOverrideDraftChange}
+                  onSaveOverride={handleSaveOverride}
+                  onDocumentAction={onDocumentAction}
                 />
               </TabsContent>
 

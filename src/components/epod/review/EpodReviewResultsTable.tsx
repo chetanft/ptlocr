@@ -52,15 +52,18 @@ export function EpodReviewResultsTable({
     from: 170,
     to: 170,
     transporter: 130,
-    attachment: 180,
-    status: 130,
+    attachment: 220,
+    ocrStatus: 130,
+    epodStatus: 140,
     confidence: 140,
-    reason: 260,
+    reason: 220,
     actions: 120,
   } as const;
 
   const getFinalMatchVariant = (status: ReviewFinalMatchStatus) => {
     switch (status) {
+      case 'rejected':
+        return 'danger';
       case 'manually_matched':
         return 'secondary';
       case 'skipped':
@@ -71,6 +74,7 @@ export function EpodReviewResultsTable({
   };
 
   const renderAttachmentCell = (item: ProcessedItem, isPreviewable: boolean) => {
+    const isMissingUpload = item.statusLabel === 'Skipped' || item.fileName.startsWith('No image uploaded for ');
     const attachmentContent = (
       <span className="inline-flex max-w-full items-center gap-2 overflow-hidden text-brand-primary">
         <Icon name="image" size={16} />
@@ -80,7 +84,17 @@ export function EpodReviewResultsTable({
       </span>
     );
 
-    if (!isPreviewable) {
+    if (!isPreviewable || isMissingUpload) {
+      if (isMissingUpload) {
+        return (
+          <span className="inline-flex max-w-full items-center gap-2 overflow-hidden text-[var(--text-primary)]">
+            <Icon name="image" size={16} />
+            <span className="truncate" title={item.fileName}>
+              {item.fileName}
+            </span>
+          </span>
+        );
+      }
       return attachmentContent;
     }
 
@@ -95,6 +109,41 @@ export function EpodReviewResultsTable({
         {attachmentContent}
       </Button>
     );
+  };
+
+  const getProcessStatusVariant = (item: ProcessedItem) => {
+    if (item.statusLabel === 'Unmapped') {
+      return 'secondary' as const;
+    }
+    return item.statusVariant;
+  };
+
+  const getEpodStatusLabel = (item: ProcessedItem) => {
+    if (item.finalDocumentDecision === 'clean' || item.deliveryReviewStatus === 'clean') {
+      return 'Clean';
+    }
+    if (item.finalDocumentDecision === 'unclean' || item.deliveryReviewStatus === 'unclean') {
+      return 'Unclean';
+    }
+    if (item.finalDocumentDecision === 'rejected') {
+      return 'Rejected';
+    }
+    if (
+      item.reason === 'Marked for manual review' ||
+      item.reason === 'Resolved manually and sent to reviewer'
+    ) {
+      return 'Raised for review';
+    }
+    return '—';
+  };
+
+  const getEpodStatusVariant = (item: ProcessedItem) => {
+    const label = getEpodStatusLabel(item);
+    if (label === 'Clean') return 'success' as const;
+    if (label === 'Unclean') return 'warning' as const;
+    if (label === 'Rejected') return 'danger' as const;
+    if (label === 'Raised for review') return 'secondary' as const;
+    return 'secondary' as const;
   };
 
   if (mode === 'review') {
@@ -172,7 +221,8 @@ export function EpodReviewResultsTable({
           <TableHead colorVariant="bg" style={{ width: processWidths.to }}>To</TableHead>
           <TableHead colorVariant="bg" style={{ width: processWidths.transporter }}>Transporter</TableHead>
           <TableHead colorVariant="bg" style={{ width: processWidths.attachment }}>Attachment</TableHead>
-          <TableHead colorVariant="bg" style={{ width: processWidths.status }}>Status</TableHead>
+          <TableHead colorVariant="bg" style={{ width: processWidths.ocrStatus }}>OCR Status</TableHead>
+          <TableHead colorVariant="bg" style={{ width: processWidths.epodStatus }}>ePOD Status</TableHead>
           <TableHead colorVariant="bg" style={{ width: processWidths.confidence }}>Data Confidence</TableHead>
           <TableHead colorVariant="bg" style={{ width: processWidths.reason }}>Reason</TableHead>
           <TableHead className="text-center" colorVariant="bg" style={{ width: processWidths.actions }}>
@@ -183,7 +233,7 @@ export function EpodReviewResultsTable({
       <TableBody>
         {items.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={10} style={{ padding: rem14(24) }}>
+            <TableCell colSpan={11} style={{ padding: rem14(24) }}>
               <Typography variant="body-primary-regular" color="tertiary">
                 No processed ePOD images for this filter.
               </Typography>
@@ -215,8 +265,15 @@ export function EpodReviewResultsTable({
               <TableCell style={{ width: processWidths.attachment }}>
                 {renderAttachmentCell(item, Boolean(onPreview))}
               </TableCell>
-              <TableCell style={{ width: processWidths.status }}>
-                <Badge variant={item.statusVariant}>{item.statusLabel}</Badge>
+              <TableCell style={{ width: processWidths.ocrStatus }}>
+                <Badge variant={getProcessStatusVariant(item)}>{item.statusLabel}</Badge>
+              </TableCell>
+              <TableCell style={{ width: processWidths.epodStatus }}>
+                {getEpodStatusLabel(item) === '—' ? (
+                  '—'
+                ) : (
+                  <Badge variant={getEpodStatusVariant(item)}>{getEpodStatusLabel(item)}</Badge>
+                )}
               </TableCell>
               <TableCell style={{ verticalAlign: 'top', width: processWidths.confidence }}>{item.confidenceLabel}</TableCell>
               <TableCell style={{ verticalAlign: 'top', width: processWidths.reason }}>

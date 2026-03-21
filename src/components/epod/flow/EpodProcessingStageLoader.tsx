@@ -50,11 +50,11 @@ export function EpodProcessingStageLoader({
                     {/* Step row */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: rem14(16) }}>
                       {/* Circle */}
-                      <div style={{ width: 32, height: 32, position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: rem14(32), height: rem14(32), position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {isComplete ? (
                           /* Completed: dark circle with checkmark */
                           <div style={{
-                            width: 24, height: 24, borderRadius: '50%',
+                            width: rem14(24), height: rem14(24), borderRadius: '50%',
                             backgroundColor: 'var(--primary)', display: 'flex',
                             alignItems: 'center', justifyContent: 'center',
                           }}>
@@ -64,7 +64,7 @@ export function EpodProcessingStageLoader({
                           /* Active: dark circle with spinning arc */
                           <>
                             <div style={{
-                              width: 24, height: 24, borderRadius: '50%',
+                              width: rem14(24), height: rem14(24), borderRadius: '50%',
                               backgroundColor: 'var(--primary)', display: 'flex',
                               alignItems: 'center', justifyContent: 'center',
                               position: 'relative', zIndex: 1,
@@ -74,7 +74,7 @@ export function EpodProcessingStageLoader({
                             {/* Spinner arc */}
                             <div style={{
                               position: 'absolute', inset: 0,
-                              width: 32, height: 32,
+                              width: rem14(32), height: rem14(32),
                               borderRadius: '50%',
                               border: '2.5px solid transparent',
                               borderTopColor: 'var(--primary)',
@@ -85,13 +85,13 @@ export function EpodProcessingStageLoader({
                         ) : (
                           /* Future: outlined circle with number */
                           <div style={{
-                            width: 24, height: 24, borderRadius: '50%',
+                            width: rem14(24), height: rem14(24), borderRadius: '50%',
                             backgroundColor: 'transparent',
                             border: '2px solid var(--border-primary)',
                             display: 'flex',
                             alignItems: 'center', justifyContent: 'center',
                           }}>
-                            <Typography variant="label-medium" style={{ color: 'var(--text-tertiary)', fontSize: 10 }}>
+                            <Typography variant="label-medium" style={{ color: 'var(--text-tertiary)', fontSize: rem14(10) }}>
                               {index + 1}
                             </Typography>
                           </div>
@@ -109,10 +109,10 @@ export function EpodProcessingStageLoader({
 
                     {/* Vertical connector */}
                     {!isLast ? (
-                      <div style={{ width: 32, display: 'flex', justifyContent: 'center', height: rem14(24) }}>
+                      <div style={{ width: rem14(32), display: 'flex', justifyContent: 'center', height: rem14(24) }}>
                         {isComplete ? (
                           /* Solid line for completed-to-next */
-                          <div style={{ width: 2, height: '100%', backgroundColor: 'var(--primary)' }} />
+                          <div style={{ width: rem14(2), height: '100%', backgroundColor: 'var(--primary)' }} />
                         ) : (
                           /* Dotted line for active/future */
                           <div style={{

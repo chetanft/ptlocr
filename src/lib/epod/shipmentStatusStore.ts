@@ -79,6 +79,32 @@ export function markShipmentsApproved(awbs: Array<string | null | undefined>) {
   setShipmentStatusOverrides(next);
 }
 
+export function markShipmentsPendingApproval(awbs: Array<string | null | undefined>) {
+  const validAwbs = awbs.filter((awb): awb is string => Boolean(awb && awb.trim()));
+  if (validAwbs.length === 0) {
+    return;
+  }
+
+  const next = { ...getShipmentStatusOverrides() };
+  for (const awb of validAwbs) {
+    next[awb] = 'Pending Approval';
+  }
+  setShipmentStatusOverrides(next);
+}
+
+export function markShipmentsRejected(awbs: Array<string | null | undefined>) {
+  const validAwbs = awbs.filter((awb): awb is string => Boolean(awb && awb.trim()));
+  if (validAwbs.length === 0) {
+    return;
+  }
+
+  const next = { ...getShipmentStatusOverrides() };
+  for (const awb of validAwbs) {
+    next[awb] = 'Rejected';
+  }
+  setShipmentStatusOverrides(next);
+}
+
 export function resetShipmentStatusOverrides() {
   if (!canUseStorage()) {
     return;

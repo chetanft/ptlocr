@@ -3,6 +3,7 @@ import type {
   EpodSubmissionJob,
   EpodSubmissionJobItem,
   EpodWorkflowResult,
+  LineOverridePatch,
   ProcessedItem,
   ProcessedOcrPatch,
 } from './epodApi';
@@ -98,9 +99,10 @@ export function applyLocalWorkflowAction(input: {
   itemId: string;
   actor: string;
   actionType: 'document' | 'line-review' | 'line-override' | 'exception-resolve' | 'ocr-update';
-  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve';
+  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection';
   lineId?: string;
   reviewAction?: 'ACCEPTED' | 'REJECTED';
+  overridePatch?: LineOverridePatch;
   exceptionId?: string;
   ocrPatch?: ProcessedOcrPatch;
 }): EpodWorkflowResult {
@@ -113,39 +115,75 @@ export function applyLocalWorkflowAction(input: {
     if (item.id !== input.itemId) return item;
 
     if (input.actionType === 'document' && input.documentAction) {
-      const manual = input.documentAction === 'accept' || input.documentAction === 'approve' || input.documentAction === 'sendToReviewer';
+      const manual =
+        input.documentAction === 'accept' ||
+        input.documentAction === 'approve' ||
+        input.documentAction === 'sendToReviewer' ||
+        input.documentAction === 'approveClean' ||
+        input.documentAction === 'approveUnclean';
       const deliveryReviewStatus =
         item.deliveryReviewStatus ??
-        (input.documentAction === 'reject' ? 'unclean' : input.documentAction === 'accept' || input.documentAction === 'approve' ? 'clean' : null);
+        (input.documentAction === 'reject' || input.documentAction === 'approveRejection'
+          ? 'unclean'
+          : input.documentAction === 'accept' || input.documentAction === 'approve' || input.documentAction === 'approveClean'
+            ? 'clean'
+            : input.documentAction === 'approveUnclean'
+              ? 'unclean'
+              : null);
       switch (input.documentAction) {
         case 'accept':
         case 'approve':
+        case 'approveClean':
+        case 'approveUnclean':
           return appendAudit(
             {
               ...item,
               statusLabel: 'Matched',
               statusVariant: 'success',
-              reason: input.documentAction === 'approve' ? 'Approved by reviewer' : 'Accepted after processing review',
+              reason:
+                input.documentAction === 'approve'
+                  ? 'Approved by reviewer'
+                  : input.documentAction === 'approveClean'
+                    ? 'Approved as clean delivery'
+                    : input.documentAction === 'approveUnclean'
+                      ? 'Approved as unclean delivery'
+                      : 'Accepted after processing review',
               manuallyMatched: manual,
               finalMatchStatus: manual ? 'manually_matched' : 'matched',
               deliveryReviewStatus,
+              finalDocumentDecision:
+                input.documentAction === 'approveClean'
+                  ? 'clean'
+                  : input.documentAction === 'approveUnclean'
+                    ? 'unclean'
+                    : item.finalDocumentDecision ?? null,
               exceptions: item.exceptions.map((exception) => ({ ...exception, resolved: true })),
             },
             input.actor,
-            input.documentAction === 'approve' ? 'Document approved by reviewer' : 'Document accepted during processing review',
+            input.documentAction === 'approve'
+              ? 'Document approved by reviewer'
+              : input.documentAction === 'approveClean'
+                ? 'Document approved as clean delivery'
+                : input.documentAction === 'approveUnclean'
+                  ? 'Document approved as unclean delivery'
+                  : 'Document accepted during processing review',
           );
         case 'reject':
+        case 'approveRejection':
           return appendAudit(
             {
               ...item,
               statusLabel: 'Skipped',
               statusVariant: 'danger',
-              reason: 'Rejected during processing review',
+              reason: input.documentAction === 'approveRejection' ? 'ePOD rejected after reconciliation review' : 'Rejected during processing review',
               finalMatchStatus: 'skipped',
               deliveryReviewStatus: 'unclean',
+              finalDocumentDecision: 'rejected',
             },
             input.actor,
-            'Document rejected during processing review',
+            input.documentAction === 'approveRejection'
+              ? 'Document rejection approved after reconciliation review'
+              : 'Document rejected during processing review',
           );
         case 'review':
           return appendAudit(
@@ -156,6 +194,7 @@ export function applyLocalWorkflowAction(input: {
               reason: 'Marked for manual review',
               manuallyMatched: true,
               finalMatchStatus: 'manually_matched',
+              finalDocumentDecision: null,
             },
             input.actor,
             'Document marked for manual review',
@@ -170,6 +209,7 @@ export function applyLocalWorkflowAction(input: {
               manuallyMatched: true,
               finalMatchStatus: 'manually_matched',
               deliveryReviewStatus: deliveryReviewStatus ?? 'clean',
+              finalDocumentDecision: item.finalDocumentDecision ?? null,
             },
             input.actor,
             'Document sent to reviewer',
@@ -181,25 +221,44 @@ export function applyLocalWorkflowAction(input: {
       return appendAudit(
         {
           ...item,
-          lineItems: item.lineItems.map((line) => line.id === input.lineId ? { ...line, reviewAction: input.reviewAction } : line),
+          lineItems: item.lineItems.map((line) =>
+            line.id === input.lineId ? { ...line, reviewAction: input.reviewAction } : line,
+          ),
           manuallyMatched: true,
           finalMatchStatus: 'manually_matched',
-          statusLabel: input.reviewAction === 'REJECTED' ? 'Needs Review' : item.statusLabel,
-          statusVariant: input.reviewAction === 'REJECTED' ? 'warning' : item.statusVariant,
-          reason: input.reviewAction === 'REJECTED' ? 'Line item rejected during review' : 'Line item accepted during review',
+          statusLabel: 'Needs Review',
+          statusVariant: 'warning',
+          reason: input.reviewAction === 'REJECTED' ? 'One or more line items were rejected during review' : 'Line item accepted during review',
+          finalDocumentDecision: null,
         },
         input.actor,
         `Line item ${input.lineId} marked ${input.reviewAction}`,
       );
     }
 
-    if (input.actionType === 'line-override' && input.lineId) {
+    if (input.actionType === 'line-override' && input.lineId && input.overridePatch) {
+      const { receivedQty, damagedQty, note } = input.overridePatch;
       return appendAudit(
         {
           ...item,
           lineItems: item.lineItems.map((line) =>
             line.id === input.lineId
-              ? { ...line, receivedQty: line.sentQty, damagedQty: 0, difference: 0, reconStatus: 'MATCH', reviewAction: 'OVERRIDDEN', note: 'Override aligned received quantity with shipment data' }
+              ? {
+                  ...line,
+                  receivedQty,
+                  damagedQty,
+                  difference: receivedQty - line.sentQty,
+                  reconStatus:
+                    damagedQty > 0
+                      ? 'DAMAGED'
+                      : receivedQty < line.sentQty
+                        ? 'SHORT'
+                        : receivedQty > line.sentQty
+                          ? 'EXCESS'
+                          : 'MATCH',
+                  reviewAction: 'OVERRIDDEN',
+                  note: note ?? 'Line item values overridden during review',
+                }
               : line,
           ),
           manuallyMatched: true,
@@ -207,6 +266,7 @@ export function applyLocalWorkflowAction(input: {
           statusLabel: 'Needs Review',
           statusVariant: 'warning',
           reason: 'Line item overridden during review',
+          finalDocumentDecision: null,
         },
         input.actor,
         `Line item ${input.lineId} overridden`,
@@ -227,6 +287,7 @@ export function applyLocalWorkflowAction(input: {
           statusLabel: unresolved ? 'Needs Review' : 'Matched',
           statusVariant: unresolved ? 'warning' : 'success',
           reason: unresolved ? 'Review in progress' : 'All exceptions resolved',
+          finalDocumentDecision: unresolved ? null : item.finalDocumentDecision ?? null,
         },
         input.actor,
         `Exception ${input.exceptionId} resolved`,
@@ -250,6 +311,7 @@ export function applyLocalWorkflowAction(input: {
           reason: nextOcrData.deliveryReviewStatus
             ? `OCR fields edited manually and marked ${nextOcrData.deliveryReviewStatus === 'clean' ? 'clean delivery' : 'unclean delivery'}`
             : 'OCR fields edited manually',
+          finalDocumentDecision: item.finalDocumentDecision ?? null,
         },
         input.actor,
         'OCR extracted fields updated manually',
@@ -278,7 +340,10 @@ function getFinalMatchStatus(item: ProcessedItem) {
 }
 
 function createSubmissionItem(item: ProcessedItem): EpodSubmissionJobItem {
-  const status = item.statusLabel === 'Skipped' || item.statusLabel === 'Unmapped' ? 'Failed' : 'Submitted';
+  const status =
+    item.statusLabel === 'Skipped' || item.statusLabel === 'Unmapped' || item.finalDocumentDecision === 'rejected'
+      ? 'Failed'
+      : 'Submitted';
   return {
     id: item.id,
     awbNumber: item.awbNumber ?? null,

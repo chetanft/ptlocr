@@ -1,4 +1,5 @@
 import { SafexpressLogo, Typography } from 'ft-design-system';
+import { rem14 } from '@/lib/rem';
 import omLogisticsLogo from '../../../../node_modules/ft-design-system/dist/assets/om-logistics-logo.svg';
 
 const LOGO_SRC_MAP: Record<string, string> = {
@@ -30,11 +31,11 @@ export function TransporterLogo({ name, showName = false }: TransporterLogoProps
 
   if (logoSrc) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: rem14(8) }}>
         <img
           src={logoSrc}
           alt={name}
-          style={{ height: 22, width: 'auto', maxWidth: 186, objectFit: 'contain', display: 'block' }}
+          style={{ height: rem14(22), width: 'auto', maxWidth: rem14(186), objectFit: 'contain', display: 'block' }}
         />
         {showName ? (
           <Typography variant="body-secondary-regular" color="secondary">{name}</Typography>
@@ -45,7 +46,7 @@ export function TransporterLogo({ name, showName = false }: TransporterLogoProps
 
   if (name === 'MEC') {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: rem14(8) }}>
         <MECInlineLogo />
         {showName ? (
           <Typography variant="body-secondary-regular" color="secondary">{name}</Typography>
@@ -56,7 +57,7 @@ export function TransporterLogo({ name, showName = false }: TransporterLogoProps
 
   if (name === 'Safexpress') {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: rem14(8) }}>
         <SafexpressLogo height={22} />
         {showName ? (
           <Typography variant="body-secondary-regular" color="secondary">{name}</Typography>

@@ -7,7 +7,7 @@ export interface ProcessedLineItem {
   damagedQty: number;
   difference: number;
   reconStatus: 'MATCH' | 'SHORT' | 'EXCESS' | 'DAMAGED';
-  reviewAction?: 'ACCEPTED' | 'REJECTED' | 'OVERRIDDEN';
+  reviewAction?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'OVERRIDDEN';
   note?: string | null;
 }
 
@@ -128,6 +128,7 @@ export interface ProcessedItem {
   receivedQty?: number | null;
   difference?: number | null;
   deliveryReviewStatus?: 'clean' | 'unclean' | null;
+  finalDocumentDecision?: 'clean' | 'unclean' | 'rejected' | null;
   systemData: ProcessedSystemData;
   ocrData: ProcessedOcrData;
   lineItems: ProcessedLineItem[];
@@ -136,9 +137,13 @@ export interface ProcessedItem {
   ocrFields: Record<string, unknown>;
 }
 
-export type ReviewFinalMatchStatus = 'matched' | 'manually_matched' | 'skipped';
+export type ReviewFinalMatchStatus = 'matched' | 'manually_matched' | 'skipped' | 'rejected';
 
-export function getReviewFinalMatchStatus(item: Pick<ProcessedItem, 'finalMatchStatus' | 'manuallyMatched' | 'statusLabel' | 'deliveryReviewStatus' | 'reason'>): ReviewFinalMatchStatus {
+export function getReviewFinalMatchStatus(item: Pick<ProcessedItem, 'finalMatchStatus' | 'manuallyMatched' | 'statusLabel' | 'deliveryReviewStatus' | 'reason' | 'finalDocumentDecision'>): ReviewFinalMatchStatus {
+  if (item.finalDocumentDecision === 'rejected') {
+    return 'rejected';
+  }
+
   if (item.finalMatchStatus) {
     return item.finalMatchStatus;
   }
@@ -162,6 +167,8 @@ export function getReviewFinalMatchLabel(status: ReviewFinalMatchStatus): string
   switch (status) {
     case 'manually_matched':
       return 'Manually matched';
+    case 'rejected':
+      return 'Rejected';
     case 'skipped':
       return 'Skipped';
     default:
@@ -203,6 +210,12 @@ export interface EpodProcessResult {
 
 export interface EpodWorkflowResult extends EpodProcessResult {
   batchId: string;
+}
+
+export interface LineOverridePatch {
+  receivedQty: number;
+  damagedQty: number;
+  note?: string | null;
 }
 
 export interface EpodSubmissionJobItem {
@@ -309,9 +322,10 @@ export async function applyEpodWorkflowAction(input: {
   itemId: string;
   actor: string;
   actionType: 'document' | 'line-review' | 'line-override' | 'exception-resolve' | 'ocr-update';
-  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve';
+  documentAction?: 'accept' | 'reject' | 'review' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection';
   lineId?: string;
   reviewAction?: 'ACCEPTED' | 'REJECTED';
+  overridePatch?: LineOverridePatch;
   exceptionId?: string;
   ocrPatch?: ProcessedOcrPatch;
 }): Promise<EpodWorkflowResult> {

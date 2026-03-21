@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from 'ft-design-system';
+import { rem14 } from '@/lib/rem';
 
 interface EpodFiltersPanelProps {
   search: string;
@@ -31,11 +32,11 @@ export function EpodFiltersPanel({
   const [endDate, setEndDate] = useState('2024-09-12');
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: rem14(16), flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
       {/* Location */}
       <Select key="mdc" defaultValue="MDC">
         <SelectTrigger
-          style={{ width: 200, height: 40, flexShrink: 0, borderRadius: '8px' }}
+          style={{ width: rem14(200), height: rem14(40), flexShrink: 0, borderRadius: rem14(8) }}
         >
           <SelectValue placeholder="MDC Labs, Amritsar" />
         </SelectTrigger>
@@ -58,7 +59,7 @@ export function EpodFiltersPanel({
       {/* Transporter (consignor/ops only) */}
       {user?.role !== 'Transporter' ? (
         <Select value={transporterFilter} onValueChange={onTransporterFilterChange}>
-          <SelectTrigger style={{ width: 200, height: 40, flexShrink: 0 }}>
+          <SelectTrigger style={{ width: rem14(200), height: rem14(40), flexShrink: 0 }}>
             <SelectValue placeholder="All Transporters" />
           </SelectTrigger>
           <SelectContent>
@@ -71,12 +72,12 @@ export function EpodFiltersPanel({
       ) : null}
 
       {/* Load Type + Search combo */}
-      <div style={{ display: 'flex', alignItems: 'center', minWidth: 280, flexShrink: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', minWidth: rem14(280), flexShrink: 1 }}>
         <Select key="load-type" defaultValue="All">
           <SelectTrigger
             style={{
-              width: 110,
-              height: 40,
+              width: rem14(110),
+              height: rem14(40),
               flexShrink: 0,
               borderTopRightRadius: 0,
               borderBottomRightRadius: 0,
@@ -92,14 +93,14 @@ export function EpodFiltersPanel({
             <SelectItem value="priority">Priority</SelectItem>
           </SelectContent>
         </Select>
-        <Input style={{ flex: 1, minWidth: 170 }}>
+        <Input style={{ flex: 1, minWidth: rem14(170) }}>
           <InputField
             placeholder="Search loads"
             leadingIcon="search"
             value={search}
             onChange={(event: ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
             style={{
-              height: 40,
+              height: rem14(40),
               borderTopLeftRadius: 0,
               borderBottomLeftRadius: 0,
             }}
@@ -114,7 +115,7 @@ export function EpodFiltersPanel({
         iconPosition="only"
         size="sm"
         aria-label="Filter"
-        style={{ width: 40, height: 40, flexShrink: 0, padding: 0 }}
+        style={{ width: rem14(40), height: rem14(40), flexShrink: 0, padding: 0 }}
       />
     </div>
   );

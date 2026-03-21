@@ -27,11 +27,12 @@ import {
   getReviewFinalMatchStatus,
   type EpodProcessResult,
   type EpodSubmissionJob,
+  type LineOverridePatch,
   type ProcessedItem,
   type ProcessedOcrPatch,
 } from '@/lib/epodApi';
 import { processSelectedAwbFlow } from '@/lib/epod/selectedFlowProcessor';
-import { markShipmentsApproved } from '@/lib/epod/shipmentStatusStore';
+import { markShipmentsApproved, markShipmentsPendingApproval, markShipmentsRejected } from '@/lib/epod/shipmentStatusStore';
 import type { EpodProcessingFilter, EpodUploadFile, EpodUploadRouteState } from '@/lib/epod/types';
 import { rem14 } from '@/lib/rem';
 
@@ -271,7 +272,7 @@ export default function EpodUploadPage() {
     setImagePreviewDraft(createEpodOcrDraft(selectedProcessItem));
   }, [imagePreview, selectedProcessItem]);
   const reviewItems = useMemo(
-    () => workingItems.filter((item) => item.statusLabel !== 'Unmapped'),
+    () => workingItems.filter((item) => item.statusLabel !== 'Unmapped' && item.finalDocumentDecision !== 'rejected'),
     [workingItems],
   );
   const reviewCounts = useMemo(() => {
@@ -441,19 +442,29 @@ export default function EpodUploadPage() {
     setWorkflowBatchId(workflow.batchId);
   };
 
-  const handleDocumentAction = async (action: 'reject' | 'sendToReviewer' | 'approve') => {
+  const handleDocumentAction = async (action: 'reject' | 'sendToReviewer' | 'approve' | 'approveClean' | 'approveUnclean' | 'approveRejection') => {
     if (!workflowBatchId || !selectedProcessItemId) {
       return;
     }
     try {
       setWorkflowError(null);
-      await syncWorkflow({
+      const workflow = await applyEpodWorkflowAction({
         batchId: workflowBatchId,
         itemId: selectedProcessItemId,
         actor,
         actionType: 'document',
         documentAction: action,
       });
+      setWorkingItems(workflow.items);
+      setWorkflowBatchId(workflow.batchId);
+      const updatedItem = workflow.items.find((item) => item.id === selectedProcessItemId);
+      if (updatedItem?.awbNumber) {
+        if (action === 'approveClean' || action === 'approveUnclean') {
+          markShipmentsPendingApproval([updatedItem.awbNumber]);
+        } else if (action === 'approveRejection') {
+          markShipmentsRejected([updatedItem.awbNumber]);
+        }
+      }
     } catch (error: unknown) {
       setWorkflowError(error instanceof Error ? error.message : 'Failed to update workflow');
     }
@@ -510,7 +521,7 @@ export default function EpodUploadPage() {
     }
   };
 
-  const handleLineOverride = async (lineId: string) => {
+  const handleLineOverride = async (lineId: string, overridePatch: LineOverridePatch) => {
     if (!workflowBatchId || !selectedProcessItemId) {
       return;
     }
@@ -522,6 +533,7 @@ export default function EpodUploadPage() {
         actor,
         actionType: 'line-override',
         lineId,
+        overridePatch,
       });
     } catch (error: unknown) {
       setWorkflowError(error instanceof Error ? error.message : 'Failed to update workflow');
