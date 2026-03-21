@@ -31,12 +31,15 @@ export function EpodFiltersPanel({
   const [startDate, setStartDate] = useState('2024-08-12');
   const [endDate, setEndDate] = useState('2024-09-12');
 
+  const componentHeight = 'var(--component-height-md)';
+  const componentRadius = 'var(--radius-md)';
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: rem14(16), flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
       {/* Location */}
       <Select key="mdc" defaultValue="MDC">
         <SelectTrigger
-          style={{ width: rem14(200), height: rem14(40), flexShrink: 0, borderRadius: rem14(8) }}
+          style={{ width: rem14(200), height: componentHeight, flexShrink: 0, borderRadius: componentRadius }}
         >
           <SelectValue placeholder="MDC Labs, Amritsar" />
         </SelectTrigger>
@@ -59,7 +62,7 @@ export function EpodFiltersPanel({
       {/* Transporter (consignor/ops only) */}
       {user?.role !== 'Transporter' ? (
         <Select value={transporterFilter} onValueChange={onTransporterFilterChange}>
-          <SelectTrigger style={{ width: rem14(200), height: rem14(40), flexShrink: 0 }}>
+          <SelectTrigger style={{ width: rem14(200), height: componentHeight, flexShrink: 0, borderRadius: componentRadius }}>
             <SelectValue placeholder="All Transporters" />
           </SelectTrigger>
           <SelectContent>
@@ -77,11 +80,13 @@ export function EpodFiltersPanel({
           <SelectTrigger
             style={{
               width: rem14(110),
-              height: rem14(40),
+              height: componentHeight,
               flexShrink: 0,
               borderTopRightRadius: 0,
               borderBottomRightRadius: 0,
               borderRight: 'none',
+              borderTopLeftRadius: componentRadius,
+              borderBottomLeftRadius: componentRadius,
               backgroundColor: 'var(--bg-secondary)',
             }}
           >
@@ -100,9 +105,11 @@ export function EpodFiltersPanel({
             value={search}
             onChange={(event: ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
             style={{
-              height: rem14(40),
+              height: componentHeight,
               borderTopLeftRadius: 0,
               borderBottomLeftRadius: 0,
+              borderTopRightRadius: componentRadius,
+              borderBottomRightRadius: componentRadius,
             }}
           />
         </Input>
@@ -113,9 +120,9 @@ export function EpodFiltersPanel({
         variant="secondary"
         icon="filter"
         iconPosition="only"
-        size="sm"
+        size="md"
         aria-label="Filter"
-        style={{ width: rem14(40), height: rem14(40), flexShrink: 0, padding: 0 }}
+        style={{ width: componentHeight, height: componentHeight, flexShrink: 0, padding: 0, borderRadius: componentRadius }}
       />
     </div>
   );
