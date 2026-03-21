@@ -265,7 +265,7 @@ function ReconciliationTab({
                 Please accept, override or reject all line items to mark Clean, Unclean and Reject.
               </Typography>
               <div className="flex items-center gap-3">
-                <Button variant="primary" disabled>
+                <Button variant="secondary" disabled>
                   Mark Clean
                 </Button>
                 <Button variant="secondary" disabled>
@@ -293,7 +293,7 @@ function ReconciliationTab({
                 Review complete. Choose final delivery disposition.
               </Typography>
               <div className="flex items-center gap-3">
-                <Button variant="primary" onClick={() => onDocumentAction('approveClean')}>
+                <Button variant="secondary" onClick={() => onDocumentAction('approveClean')}>
                   Mark Clean
                 </Button>
                 <Button variant="secondary" onClick={() => onDocumentAction('approveUnclean')}>
@@ -741,7 +741,7 @@ export function EpodProcessDetailDrawer({
                     </Table>
                     {!readOnly ? (
                       <div className="flex flex-wrap items-center gap-3">
-                        <Button variant="primary" onClick={() => void handleSaveDrawerDraft()} disabled={!hasDraftChanges} loading={isSavingDraft}>
+                        <Button variant="secondary" onClick={() => void handleSaveDrawerDraft()} disabled={!hasDraftChanges} loading={isSavingDraft}>
                           Save OCR changes
                         </Button>
                       </div>

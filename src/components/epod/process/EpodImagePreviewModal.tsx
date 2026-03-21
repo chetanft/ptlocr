@@ -449,7 +449,7 @@ export function EpodImagePreviewModal({
               </Button>
               {!readOnly ? (
                 <Button
-                  variant="primary"
+                  variant="secondary"
                   onClick={() => void (draft ? onSaveOcrEdits(draft) : undefined)}
                   disabled={!draft || !hasDraftChanges}
                   loading={isSaving}
